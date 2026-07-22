@@ -4,26 +4,18 @@ USER 0
 
 RUN dnf install -y git && dnf clean all
 
-RUN tee /etc/yum.repos.d/google-cloud-sdk.repo << 'EOM'
-[google-cloud-cli]
-name=Google Cloud CLI
-baseurl=https://packages.cloud.google.com/yum/repos/cloud-sdk-el9-x86_64
-enabled=1
-gpgcheck=1
-repo_gpgcheck=0
-gpgkey=https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-EOM
-
-RUN CLOUDSDK_SKIP_PY_COMPILATION=1 dnf install -y google-cloud-cli \
-    && dnf clean all
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then GCLOUD_ARCH="arm"; else GCLOUD_ARCH="x86_64"; fi && \
+    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
+      | tar -xz -C /usr/lib
 
 RUN npm install -g t3 @anthropic-ai/claude-code
 
-COPY entrypoint.sh /t3code/entrypoint.sh
+COPY entrypoint.sh /usr/local/bin/t3code-entrypoint.sh
 COPY entrypoint-init-container.sh /entrypoint-init-container.sh
 
-RUN chgrp -R 0 /t3code /opt/app-root && \
-    chmod -R g=u /t3code /opt/app-root && \
+RUN chgrp -R 0 /opt/app-root && \
+    chmod -R g=u /opt/app-root && \
     chmod g=u /etc/passwd
 
 USER 1001

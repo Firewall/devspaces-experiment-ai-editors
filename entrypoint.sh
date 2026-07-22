@@ -8,11 +8,12 @@ if ! whoami &> /dev/null; then
 fi
 
 export CLAUDE_CODE_USE_VERTEX=true
-export PATH="/t3code/google-cloud-sdk/bin:${PATH}"
+export PATH="/t3code/npm-global/bin:/t3code/google-cloud-sdk/bin:${PATH}"
 
 cd ${PROJECTS_ROOT:-/projects}
 
 exec t3 serve \
   --host 0.0.0.0 \
   --port 3773 \
-  --no-browser
+  --no-browser \
+  --mode web
