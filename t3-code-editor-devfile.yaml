@@ -1,0 +1,78 @@
+schemaVersion: 2.2.2
+
+metadata:
+  name: t3-code/t3-code-editor/latest
+  displayName: T3 Code + Claude
+  description: AI-native coding environment powered by Claude on Vertex AI
+  attributes:
+    publisher: t3-code
+    version: latest
+    title: T3 Code + Claude — AI-native coding on Vertex AI
+    firstPublicationDate: '2025-01-01'
+    repository: https://github.com/pingdotgg/t3code
+
+commands:
+  - id: init-t3-code-injector
+    apply:
+      component: t3-code-injector
+  - id: init-t3-code-start
+    exec:
+      component: t3-code-runtime
+      commandLine: >-
+        nohup /t3code/entrypoint.sh > /t3code/entrypoint-logs.txt 2>&1 &
+
+events:
+  preStart:
+    - init-t3-code-injector
+  postStart:
+    - init-t3-code-start
+
+components:
+  - name: t3-code-injector
+    container:
+      image: ${IMAGE}
+      command:
+        - /entrypoint-init-container.sh
+      volumeMounts:
+        - name: t3code
+          path: /t3code
+      memoryLimit: 256Mi
+      memoryRequest: 32Mi
+      cpuLimit: 500m
+      cpuRequest: 30m
+
+  - name: t3-code-runtime
+    container:
+      image: quay.io/devfile/universal-developer-image:latest
+      env:
+        - name: CLAUDE_CODE_USE_VERTEX
+          value: "1"
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "${GOOGLE_CLOUD_PROJECT}"
+        - name: CLOUD_ML_REGION
+          value: "${CLOUD_ML_REGION}"
+      volumeMounts:
+        - name: t3code
+          path: /t3code
+      memoryLimit: 2048Mi
+      memoryRequest: 512Mi
+      cpuLimit: 1000m
+      cpuRequest: 100m
+      endpoints:
+        - name: t3-code
+          targetPort: 3773
+          exposure: public
+          protocol: https
+          secure: true
+          attributes:
+            type: main
+            cookiesAuthEnabled: true
+            discoverable: false
+            urlRewriteSupported: true
+    attributes:
+      app.kubernetes.io/component: t3-code-runtime
+      app.kubernetes.io/part-of: t3-code.eclipse.org
+      controller.devfile.io/container-contribution: true
+
+  - name: t3code
+    volume: {}
