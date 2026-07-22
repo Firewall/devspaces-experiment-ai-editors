@@ -13,7 +13,11 @@ See [devspace-t3code-plan.md](devspace-t3code-plan.md) for the full architecture
 
 ## Configuration
 
-Edit `config.env` with your values:
+Copy the example config and fill in your values:
+
+```bash
+cp config.env.example config.env
+```
 
 ```env
 IMAGE=quay.io/my-org/devspaces-t3-code-editor:latest
@@ -22,12 +26,13 @@ GOOGLE_CLOUD_PROJECT=my-project
 CLOUD_ML_REGION=us-central1
 ```
 
-All placeholders are in this single file. The Makefile and devfile both read from it.
+`config.env` is gitignored — your settings stay local.
 
 ## Quick Start
 
 ```bash
-# 1. Edit config.env with your values
+# 1. Create and edit config.env
+cp config.env.example config.env
 vi config.env
 
 # 2. Build the editor image
@@ -64,7 +69,7 @@ make unregister
 
 | File | Purpose |
 |------|---------|
-| `config.env` | All configurable values (image, namespace, GCP project, region) |
+| `config.env.example` | Template for local `config.env` (image, namespace, GCP project, region) |
 | `Dockerfile` | Editor container image (UBI9 + Node.js 22 + T3 Code + Claude Code + gcloud) |
 | `entrypoint.sh` | Runtime startup — launches `t3 serve` |
 | `entrypoint-init-container.sh` | Init container — copies binaries into shared volume |
