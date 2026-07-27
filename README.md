@@ -46,26 +46,26 @@ CLOUD_ML_REGION=us-central1
 ```bash
 cp config.env.example config.env
 vi config.env
-./deploy.sh
+./t3-code/deploy.sh
 ```
 
-Prints the T3 Code URL and pairing token when done. Tear down: `./teardown.sh`
+Prints the T3 Code URL and pairing token when done. Tear down: `./t3-code/teardown.sh`
 
 ## Quick Start — OpenChamber (no admin required)
 
 ```bash
 cp config.env.example config.env
 vi config.env
-./deploy-openchamber.sh
+./openchamber/deploy.sh
 ```
 
-Prints the OpenChamber URL and UI password when done. Tear down: `./teardown-openchamber.sh`
+Prints the OpenChamber URL and UI password when done. Tear down: `./openchamber/teardown.sh`
 
 OpenChamber supports 75+ LLM providers (Anthropic, OpenAI, Google, local models, etc.) via [OpenCode](https://opencode.ai). Configure your provider by shelling into the workspace and editing `~/.config/opencode/config.json`. For Vertex AI, also run `gcloud auth application-default login`.
 
 ## What the deploy scripts do
 
-Both `deploy.sh` (T3 Code) and `deploy-openchamber.sh` (OpenChamber) follow the same steps:
+Both `t3-code/deploy.sh` and `openchamber/deploy.sh` follow the same steps:
 
 1. Build the container image for `linux/amd64` and push to your registry
 2. Create a `DevWorkspaceTemplate` (the editor definition) in your namespace
@@ -159,32 +159,24 @@ To remove: `make unregister` / `make oc-unregister`.
 
 ## Files
 
-### T3 Code
+### Repository layout
 
-| File | Purpose |
-|------|---------|
-| `deploy.sh` | One-command deploy: build, push, create workspace, create route |
-| `teardown.sh` | Remove all workspace resources |
-| `Containerfile` | Editor image (UBI9 + Node.js 22 + T3 Code + Claude Code + gcloud) |
-| `entrypoint.sh` | Runtime startup with auto-restart and persistent pairing token |
-| `entrypoint-init-container.sh` | Init container — copies binaries into shared volume |
-| `t3-code-editor-devfile.yaml` | Che editor definition template |
-
-### OpenChamber
-
-| File | Purpose |
-|------|---------|
-| `deploy-openchamber.sh` | One-command deploy: build, push, create workspace, create route |
-| `teardown-openchamber.sh` | Remove all workspace resources |
-| `Containerfile.openchamber` | Editor image (UBI9 + OpenChamber + OpenCode + gcloud) |
-| `entrypoint-openchamber.sh` | Runtime startup with auto-restart and persistent UI password |
-| `entrypoint-init-container-openchamber.sh` | Init container — copies binaries into shared volume |
-| `openchamber-editor-devfile.yaml` | Che editor definition template |
-
-### Shared
-
-| File | Purpose |
-|------|---------|
-| `config.env.example` | Template for local `config.env` (both editors) |
-| `Makefile` | Build, push, and cluster-wide registration for both editors |
-| `architecture-plan.md` | Full architecture plan |
+```
+├── config.env.example          # Template for local config.env
+├── Makefile                    # Build, push, and cluster-wide registration
+├── architecture-plan.md        # Full architecture plan
+├── t3-code/
+│   ├── Containerfile           # UBI9 + Node.js 22 + T3 Code + Claude Code + gcloud
+│   ├── deploy.sh               # One-command deploy
+│   ├── teardown.sh             # Remove all workspace resources
+│   ├── entrypoint.sh           # Runtime startup with auto-restart
+│   ├── entrypoint-init-container.sh
+│   └── devfile.yaml            # Che editor definition template
+└── openchamber/
+    ├── Containerfile           # UBI9 + OpenChamber + OpenCode + gcloud
+    ├── deploy.sh               # One-command deploy
+    ├── teardown.sh             # Remove all workspace resources
+    ├── entrypoint.sh           # Runtime startup with auto-restart
+    ├── entrypoint-init-container.sh
+    └── devfile.yaml            # Che editor definition template
+```

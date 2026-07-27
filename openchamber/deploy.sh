@@ -1,12 +1,13 @@
 #!/bin/bash
 set -e
 
-if [ ! -f config.env ]; then
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+if [ ! -f "$REPO_ROOT/config.env" ]; then
   echo "config.env not found. Copy from config.env.example and fill in your values:"
   echo "  cp config.env.example config.env"
   exit 1
 fi
-source config.env
+source "$REPO_ROOT/config.env"
 
 NAMESPACE="${NAMESPACE:-rh-ee-mdemytte-dev}"
 OPENCHAMBER_IMAGE="${OPENCHAMBER_IMAGE:?Set OPENCHAMBER_IMAGE in config.env}"
@@ -15,7 +16,7 @@ echo "=== Deploying OpenChamber to namespace: $NAMESPACE ==="
 
 # Step 1: Build and push
 echo "Building image for linux/amd64..."
-podman build --platform linux/amd64 -t "$OPENCHAMBER_IMAGE" -f Containerfile.openchamber .
+podman build --platform linux/amd64 -t "$OPENCHAMBER_IMAGE" "$(dirname "$0")"
 echo "Pushing image..."
 podman push "$OPENCHAMBER_IMAGE"
 

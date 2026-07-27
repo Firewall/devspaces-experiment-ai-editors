@@ -1,6 +1,7 @@
 #!/bin/bash
 
-source config.env 2>/dev/null
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$REPO_ROOT/config.env" 2>/dev/null
 NAMESPACE="${NAMESPACE:-rh-ee-mdemytte-dev}"
 
 echo "=== Tearing down T3 Code from namespace: $NAMESPACE ==="
