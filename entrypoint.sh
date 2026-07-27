@@ -25,7 +25,25 @@ while true; do
     --no-browser \
     --mode web \
     --auto-bootstrap-project-from-cwd \
-    "${PROJECTS_ROOT:-/projects}"
+    "${PROJECTS_ROOT:-/projects}" &
+  T3_PID=$!
+
+  sleep 5
+
+  if [ ! -f "$PERSIST/pairing-token.txt" ]; then
+    TOKEN_JSON=$(t3 auth pairing create --ttl 30d --label "devspaces" --json 2>/dev/null)
+    if [ -n "$TOKEN_JSON" ]; then
+      CREDENTIAL=$(echo "$TOKEN_JSON" | grep '"credential"' | sed 's/.*: "//;s/".*//')
+      echo "$CREDENTIAL" > "$PERSIST/pairing-token.txt"
+      echo "Pairing token created and saved to $PERSIST/pairing-token.txt"
+    fi
+  fi
+
+  if [ -f "$PERSIST/pairing-token.txt" ]; then
+    echo "Pairing token: $(cat "$PERSIST/pairing-token.txt")"
+  fi
+
+  wait $T3_PID
   echo "T3 Code exited ($?), restarting in 2s..."
   sleep 2
 done
