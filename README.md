@@ -7,8 +7,6 @@ Packages AI-native code editors as native OpenShift Dev Spaces editors alongside
 | [T3 Code](https://github.com/pingdotgg/t3code) | Claude (Vertex AI) | 3773 | Pairing token |
 | [OpenChamber](https://github.com/openchamber/openchamber) | 75+ providers via [OpenCode](https://opencode.ai) | 3000 | UI password |
 
-See [architecture-plan.md](architecture-plan.md) for the full architecture and design rationale.
-
 ## Prerequisites
 
 - `podman` (or `docker`)
@@ -164,7 +162,6 @@ To remove: `make unregister` / `make oc-unregister`.
 ```
 ├── config.env.example          # Template for local config.env
 ├── Makefile                    # Build, push, and cluster-wide registration
-├── architecture-plan.md        # Full architecture plan
 ├── t3-code/
 │   ├── Containerfile           # UBI9 + Node.js 22 + T3 Code + Claude Code + gcloud
 │   ├── deploy.sh               # One-command deploy
