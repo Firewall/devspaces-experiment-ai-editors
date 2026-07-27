@@ -15,9 +15,9 @@ echo "=== Deploying T3 Code to namespace: $NAMESPACE ==="
 
 # Step 1: Build and push image
 echo "Building image for linux/amd64..."
-podman build --platform linux/amd64 -t "$IMAGE" .
+podman build --platform linux/amd64 -t "$T3_IMAGE" .
 echo "Pushing image..."
-podman push "$IMAGE"
+podman push "$T3_IMAGE"
 
 # Step 2: Create DevWorkspaceTemplate
 echo "Creating editor template..."
@@ -30,7 +30,7 @@ spec:
   components:
     - name: t3-code-injector
       container:
-        image: ${IMAGE}
+        image: ${T3_IMAGE}
         command:
           - /entrypoint-init-container.sh
         volumeMounts:

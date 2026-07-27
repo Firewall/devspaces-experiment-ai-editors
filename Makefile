@@ -14,13 +14,13 @@ OC_DEVFILE ?= openchamber-editor-devfile.yaml
 
 # === T3 Code targets ===
 build:
-	podman build --platform linux/amd64 -t $(IMAGE) .
+	podman build --platform linux/amd64 -t $(T3_IMAGE) .
 
 push:
-	podman push $(IMAGE)
+	podman push $(T3_IMAGE)
 
 devfile:
-	envsubst '$$IMAGE $$GOOGLE_CLOUD_PROJECT $$CLOUD_ML_REGION' < $(DEVFILE) > $(DEVFILE:.yaml=-rendered.yaml)
+	envsubst '$$T3_IMAGE $$GOOGLE_CLOUD_PROJECT $$CLOUD_ML_REGION' < $(DEVFILE) > $(DEVFILE:.yaml=-rendered.yaml)
 
 register: devfile
 	oc create configmap $(CONFIGMAP) \

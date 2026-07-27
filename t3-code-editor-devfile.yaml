@@ -30,7 +30,7 @@ events:
 components:
   - name: t3-code-injector
     container:
-      image: ${IMAGE}
+      image: ${T3_IMAGE}
       command:
         - /entrypoint-init-container.sh
       volumeMounts:

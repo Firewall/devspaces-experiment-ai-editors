@@ -27,7 +27,7 @@ vi config.env
 
 ```env
 # --- T3 Code ---
-IMAGE=quay.io/my-org/devspaces-t3-code-editor:latest
+T3_IMAGE=quay.io/my-org/devspaces-t3-code-editor:latest
 
 # --- OpenChamber ---
 OPENCHAMBER_IMAGE=quay.io/my-org/devspaces-openchamber-editor:latest
