@@ -105,10 +105,10 @@ spec:
         name: t3-code-editor
   template:
     projects:
-      - name: dev-spaces-t3code
+      - name: devspaces-experiment-ai-editors
         git:
           remotes:
-            origin: https://github.com/Firewall/dev-spaces-t3code.git
+            origin: https://github.com/Firewall/devspaces-experiment-ai-editors.git
 EOF
 
 # Step 4: Wait for pod

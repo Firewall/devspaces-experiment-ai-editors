@@ -1,0 +1,78 @@
+schemaVersion: 2.2.2
+
+metadata:
+  name: openchamber/openchamber-editor/latest
+  displayName: OpenChamber + OpenCode
+  description: Agentic development environment with multi-model AI support
+  attributes:
+    publisher: openchamber
+    version: latest
+    title: OpenChamber — agentic coding on OpenCode
+    firstPublicationDate: '2025-01-01'
+    repository: https://github.com/openchamber/openchamber
+
+commands:
+  - id: init-openchamber-injector
+    apply:
+      component: openchamber-injector
+  - id: init-openchamber-start
+    exec:
+      component: openchamber-runtime
+      commandLine: >-
+        nohup /openchamber/entrypoint.sh > /openchamber/entrypoint-logs.txt 2>&1 &
+
+events:
+  preStart:
+    - init-openchamber-injector
+  postStart:
+    - init-openchamber-start
+
+components:
+  - name: openchamber-injector
+    container:
+      image: ${OPENCHAMBER_IMAGE}
+      command:
+        - /entrypoint-init-container.sh
+      volumeMounts:
+        - name: openchamber
+          path: /openchamber
+      memoryLimit: 256Mi
+      memoryRequest: 32Mi
+      cpuLimit: 500m
+      cpuRequest: 30m
+
+  - name: openchamber-runtime
+    container:
+      image: quay.io/devfile/universal-developer-image:latest
+      env:
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "${GOOGLE_CLOUD_PROJECT}"
+        - name: CLOUD_ML_REGION
+          value: "${CLOUD_ML_REGION}"
+        - name: OPENCHAMBER_UI_PASSWORD
+          value: "${OPENCHAMBER_UI_PASSWORD}"
+      volumeMounts:
+        - name: openchamber
+          path: /openchamber
+      memoryLimit: 2048Mi
+      memoryRequest: 512Mi
+      cpuLimit: 1000m
+      cpuRequest: 100m
+      endpoints:
+        - name: openchamber
+          targetPort: 3000
+          exposure: public
+          protocol: https
+          secure: true
+          attributes:
+            type: main
+            cookiesAuthEnabled: true
+            discoverable: false
+            urlRewriteSupported: true
+    attributes:
+      app.kubernetes.io/component: openchamber-runtime
+      app.kubernetes.io/part-of: openchamber.eclipse.org
+      controller.devfile.io/container-contribution: true
+
+  - name: openchamber
+    volume: {}
