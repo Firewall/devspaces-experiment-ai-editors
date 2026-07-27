@@ -7,12 +7,12 @@ T3_CONFIGMAP ?= t3-code-editor-definition
 T3_DEVFILE = $(T3_DIR)/devfile.yaml
 
 # ---- OpenChamber ----
-OC_DIR = openchamber
-OC_CONFIGMAP ?= openchamber-editor-definition
-OC_DEVFILE = $(OC_DIR)/devfile.yaml
+CHAMBER_DIR = openchamber
+CHAMBER_CONFIGMAP ?= openchamber-editor-definition
+CHAMBER_DEVFILE = $(CHAMBER_DIR)/devfile.yaml
 
 .PHONY: t3-build t3-push t3-register t3-unregister t3-devfile \
-        oc-build oc-push oc-register oc-unregister oc-devfile
+        chamber-build chamber-push chamber-register chamber-unregister chamber-devfile
 
 # === T3 Code targets ===
 t3-build:
@@ -38,24 +38,24 @@ t3-unregister:
 	oc delete configmap $(T3_CONFIGMAP) -n $(NAMESPACE)
 
 # === OpenChamber targets ===
-oc-build:
-	podman build --platform linux/amd64 -t $(OPENCHAMBER_IMAGE) $(OC_DIR)
+chamber-build:
+	podman build --platform linux/amd64 -t $(OPENCHAMBER_IMAGE) $(CHAMBER_DIR)
 
-oc-push:
+chamber-push:
 	podman push $(OPENCHAMBER_IMAGE)
 
-oc-devfile:
-	envsubst '$$OPENCHAMBER_IMAGE $$GOOGLE_CLOUD_PROJECT $$CLOUD_ML_REGION $$OPENCHAMBER_UI_PASSWORD' < $(OC_DEVFILE) > $(OC_DIR)/devfile-rendered.yaml
+chamber-devfile:
+	envsubst '$$OPENCHAMBER_IMAGE $$GOOGLE_CLOUD_PROJECT $$CLOUD_ML_REGION $$OPENCHAMBER_UI_PASSWORD' < $(CHAMBER_DEVFILE) > $(CHAMBER_DIR)/devfile-rendered.yaml
 
-oc-register: oc-devfile
-	oc create configmap $(OC_CONFIGMAP) \
-	  --from-file=$(OC_DIR)/devfile-rendered.yaml \
+chamber-register: chamber-devfile
+	oc create configmap $(CHAMBER_CONFIGMAP) \
+	  --from-file=$(CHAMBER_DIR)/devfile-rendered.yaml \
 	  -n $(NAMESPACE)
-	oc label configmap $(OC_CONFIGMAP) \
+	oc label configmap $(CHAMBER_CONFIGMAP) \
 	  app.kubernetes.io/part-of=che.eclipse.org \
 	  app.kubernetes.io/component=editor-definition \
 	  -n $(NAMESPACE)
-	@rm -f $(OC_DIR)/devfile-rendered.yaml
+	@rm -f $(CHAMBER_DIR)/devfile-rendered.yaml
 
-oc-unregister:
-	oc delete configmap $(OC_CONFIGMAP) -n $(NAMESPACE)
+chamber-unregister:
+	oc delete configmap $(CHAMBER_CONFIGMAP) -n $(NAMESPACE)

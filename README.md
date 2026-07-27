@@ -127,13 +127,13 @@ Register editors in the dashboard editor picker for all users:
 
 ```bash
 # T3 Code
-make register
+make t3-register
 
 # OpenChamber
-make oc-register
+make chamber-register
 ```
 
-To remove: `make unregister` / `make oc-unregister`.
+To remove: `make t3-unregister` / `make chamber-unregister`.
 
 ## Known Issues
 
