@@ -165,7 +165,7 @@ To remove: `make unregister` / `make oc-unregister`.
 |------|---------|
 | `deploy.sh` | One-command deploy: build, push, create workspace, create route |
 | `teardown.sh` | Remove all workspace resources |
-| `Dockerfile` | Editor image (UBI9 + Node.js 22 + T3 Code + Claude Code + gcloud) |
+| `Containerfile` | Editor image (UBI9 + Node.js 22 + T3 Code + Claude Code + gcloud) |
 | `entrypoint.sh` | Runtime startup with auto-restart and persistent pairing token |
 | `entrypoint-init-container.sh` | Init container — copies binaries into shared volume |
 | `t3-code-editor-devfile.yaml` | Che editor definition template |
@@ -176,7 +176,7 @@ To remove: `make unregister` / `make oc-unregister`.
 |------|---------|
 | `deploy-openchamber.sh` | One-command deploy: build, push, create workspace, create route |
 | `teardown-openchamber.sh` | Remove all workspace resources |
-| `Dockerfile.openchamber` | Editor image (UBI9 + Bun + OpenChamber + OpenCode + gcloud) |
+| `Containerfile.openchamber` | Editor image (UBI9 + OpenChamber + OpenCode + gcloud) |
 | `entrypoint-openchamber.sh` | Runtime startup with auto-restart and persistent UI password |
 | `entrypoint-init-container-openchamber.sh` | Init container — copies binaries into shared volume |
 | `openchamber-editor-devfile.yaml` | Che editor definition template |

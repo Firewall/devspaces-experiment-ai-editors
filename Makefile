@@ -37,7 +37,7 @@ unregister:
 
 # === OpenChamber targets ===
 oc-build:
-	podman build --platform linux/amd64 -t $(OPENCHAMBER_IMAGE) -f Dockerfile.openchamber .
+	podman build --platform linux/amd64 -t $(OPENCHAMBER_IMAGE) -f Containerfile.openchamber .
 
 oc-push:
 	podman push $(OPENCHAMBER_IMAGE)
