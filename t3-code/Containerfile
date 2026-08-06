@@ -11,10 +11,10 @@ RUN ARCH=$(uname -m) && \
 
 RUN npm install -g t3@nightly opencode-ai
 
-COPY entrypoint.sh /usr/local/bin/t3code-entrypoint.sh
-COPY bashrc.sh /usr/local/bin/t3code-bashrc.sh
-COPY discover-models.sh /usr/local/bin/t3code-discover-models.sh
-COPY entrypoint-init-container.sh /entrypoint-init-container.sh
+COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
+COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
+COPY t3-code/entrypoint.sh /usr/local/bin/t3code-entrypoint.sh
+COPY t3-code/entrypoint-init-container.sh /entrypoint-init-container.sh
 
 RUN chgrp -R 0 /opt/app-root && \
     chmod -R g=u /opt/app-root && \

@@ -12,15 +12,11 @@ if [ -f /t3code/bashrc.sh ] && ! grep -q 't3code/bashrc.sh' "$HOME/.bashrc" 2>/d
   echo 'source /t3code/bashrc.sh' >> "$HOME/.bashrc"
 fi
 
+SA_CA=/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+[ -f "$SA_CA" ] && export NODE_EXTRA_CA_CERTS="$SA_CA"
+
 if [ -f /t3code/discover-models.sh ]; then
   bash /t3code/discover-models.sh "${PROJECTS_ROOT:-/projects}/opencode.json"
-fi
-
-SA_CA=/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
-if [ -f "$SA_CA" ]; then
-  mkdir -p "$HOME/.config/opencode"
-  cp "$SA_CA" "$HOME/.config/opencode/service-ca.crt"
-  export NODE_EXTRA_CA_CERTS="$HOME/.config/opencode/service-ca.crt"
 fi
 
 PERSIST="${PROJECTS_ROOT:-/projects}/.devspaces-t3code"

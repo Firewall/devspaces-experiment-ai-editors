@@ -22,7 +22,7 @@ CHAMBER_DEVFILE = $(CHAMBER_DIR)/devfile.yaml
 
 # === T3 Code targets ===
 t3-build:
-	podman build --platform linux/amd64 -t $(T3_IMAGE) $(T3_DIR)
+	podman build --platform linux/amd64 -f $(T3_DIR)/Containerfile -t $(T3_IMAGE) .
 
 t3-push:
 	podman push $(T3_IMAGE)
@@ -45,7 +45,7 @@ t3-unregister:
 
 # === T3 Connect targets ===
 connect-build:
-	podman build --platform linux/amd64 -t $(T3_CONNECT_IMAGE) $(CONNECT_DIR)
+	podman build --platform linux/amd64 -f $(CONNECT_DIR)/Containerfile -t $(T3_CONNECT_IMAGE) .
 
 connect-push:
 	podman push $(T3_CONNECT_IMAGE)
@@ -68,7 +68,7 @@ connect-unregister:
 
 # === OpenChamber targets ===
 chamber-build:
-	podman build --platform linux/amd64 -t $(OPENCHAMBER_IMAGE) $(CHAMBER_DIR)
+	podman build --platform linux/amd64 -f $(CHAMBER_DIR)/Containerfile -t $(OPENCHAMBER_IMAGE) .
 
 chamber-push:
 	podman push $(OPENCHAMBER_IMAGE)

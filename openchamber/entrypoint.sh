@@ -9,6 +9,13 @@ fi
 
 export PATH="/openchamber/npm-global/bin:/openchamber/google-cloud-sdk/bin:${PATH}"
 
+if [ -f /openchamber/bashrc.sh ] && ! grep -q 'openchamber/bashrc.sh' "$HOME/.bashrc" 2>/dev/null; then
+  echo 'source /openchamber/bashrc.sh' >> "$HOME/.bashrc"
+fi
+
+SA_CA=/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+[ -f "$SA_CA" ] && export NODE_EXTRA_CA_CERTS="$SA_CA"
+
 # Pin OpenCode port so it doesn't conflict with other services in the pod
 export OPENCODE_PORT=4096
 
@@ -25,6 +32,10 @@ ln -sfn "$PERSIST/opencode-config"    "$HOME/.config/opencode"
 ln -sfn "$PERSIST/opencode-share"     "$HOME/.local/share/opencode"
 ln -sfn "$PERSIST/opencode-state"     "$HOME/.local/state/opencode"
 ln -sfn "$PERSIST/openchamber-config" "$HOME/.config/openchamber"
+
+if [ -f /openchamber/discover-models.sh ]; then
+  bash /openchamber/discover-models.sh "${PROJECTS_ROOT:-/projects}/opencode.json"
+fi
 
 # Vertex AI (if configured)
 if [ -n "$GOOGLE_CLOUD_PROJECT" ]; then

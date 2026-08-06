@@ -16,7 +16,7 @@ echo "=== Deploying OpenChamber to namespace: $NAMESPACE ==="
 
 # Step 1: Build and push
 echo "Building image for linux/amd64..."
-podman build --platform linux/amd64 -t "$OPENCHAMBER_IMAGE" "$(dirname "$0")"
+podman build --platform linux/amd64 -f "$(dirname "$0")/Containerfile" -t "$OPENCHAMBER_IMAGE" "$REPO_ROOT"
 echo "Pushing image..."
 podman push "$OPENCHAMBER_IMAGE"
 

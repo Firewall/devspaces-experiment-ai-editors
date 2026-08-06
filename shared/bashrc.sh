@@ -1,9 +1,5 @@
 SA_CA=/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
-if [ -f "$SA_CA" ]; then
-  mkdir -p "$HOME/.config/opencode"
-  cp "$SA_CA" "$HOME/.config/opencode/service-ca.crt"
-  export NODE_EXTRA_CA_CERTS="$HOME/.config/opencode/service-ca.crt"
-fi
+[ -f "$SA_CA" ] && export NODE_EXTRA_CA_CERTS="$SA_CA"
 
 __git_ps1_minimal() {
   local branch

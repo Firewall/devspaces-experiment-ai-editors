@@ -17,7 +17,7 @@ echo "=== Deploying T3 Connect to namespace: $NAMESPACE ==="
 
 # Step 1: Build and push image
 echo "Building image for linux/amd64..."
-podman build --platform linux/amd64 -t "$T3_CONNECT_IMAGE" "$(dirname "$0")"
+podman build --platform linux/amd64 -f "$(dirname "$0")/Containerfile" -t "$T3_CONNECT_IMAGE" "$REPO_ROOT"
 echo "Pushing image..."
 podman push "$T3_CONNECT_IMAGE"
 

@@ -2,9 +2,8 @@ FROM registry.access.redhat.com/ubi9/nodejs-22 AS builder
 
 USER 0
 
-RUN dnf install -y --disablerepo='*' --enablerepo='ubi-9-appstream-rpms' --enablerepo='ubi-9-baseos-rpms' git && dnf clean all
+RUN dnf install -y --disablerepo='*' --enablerepo='ubi-*' git && dnf clean all
 
-# gcloud CLI (Vertex AI auth — tarball because UBI9 Python 3.9 < gcloud's 3.10 requirement)
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "aarch64" ]; then GCLOUD_ARCH="arm"; else GCLOUD_ARCH="x86_64"; fi && \
     curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
@@ -12,8 +11,10 @@ RUN ARCH=$(uname -m) && \
 
 RUN npm install -g @openchamber/web opencode-ai
 
-COPY entrypoint-openchamber.sh /usr/local/bin/openchamber-entrypoint.sh
-COPY entrypoint-init-container-openchamber.sh /entrypoint-init-container.sh
+COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
+COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
+COPY openchamber/entrypoint.sh /usr/local/bin/openchamber-entrypoint.sh
+COPY openchamber/entrypoint-init-container.sh /entrypoint-init-container.sh
 
 RUN chgrp -R 0 /opt/app-root && \
     chmod -R g=u /opt/app-root && \

@@ -9,6 +9,17 @@ fi
 export CLAUDE_CODE_USE_VERTEX=true
 export PATH="/t3connect/npm-global/bin:/t3connect/google-cloud-sdk/bin:${PATH}"
 
+if [ -f /t3connect/bashrc.sh ] && ! grep -q 't3connect/bashrc.sh' "$HOME/.bashrc" 2>/dev/null; then
+  echo 'source /t3connect/bashrc.sh' >> "$HOME/.bashrc"
+fi
+
+SA_CA=/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+[ -f "$SA_CA" ] && export NODE_EXTRA_CA_CERTS="$SA_CA"
+
+if [ -f /t3connect/discover-models.sh ]; then
+  bash /t3connect/discover-models.sh "${PROJECTS_ROOT:-/projects}/opencode.json"
+fi
+
 PERSIST="${PROJECTS_ROOT:-/projects}/.devspaces-t3connect"
 mkdir -p "$PERSIST/gcloud" "$PERSIST/claude" "$PERSIST/t3-home"
 
