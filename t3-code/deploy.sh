@@ -99,11 +99,7 @@ spec:
       kubernetes:
         name: t3-code-editor
   template:
-    projects:
-      - name: devspaces-experiment-ai-editors
-        git:
-          remotes:
-            origin: https://github.com/Firewall/devspaces-experiment-ai-editors.git
+    projects: []
 EOF
 
 # Step 4: Wait for pod
