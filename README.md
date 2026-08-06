@@ -4,7 +4,7 @@ Packages AI-native code editors as native OpenShift Dev Spaces editors alongside
 
 | Editor | AI Backend | Port | Auth | Access |
 |--------|-----------|------|------|--------|
-| [T3 Code](https://github.com/pingdotgg/t3code) | Claude (Vertex AI) | 3773 | Pairing token | OpenShift Route (browser) |
+| [T3 Code](https://github.com/pingdotgg/t3code) | Red Hat AI (in-cluster KServe) via [OpenCode](https://opencode.ai) | 3773 | Pairing token | OpenShift Route (browser) |
 | [T3 Code (Connect)](https://github.com/pingdotgg/t3code) | Claude (Vertex AI) | 3773 | Clerk OAuth | Cloudflare Tunnel (T3 app) |
 | [OpenChamber](https://github.com/openchamber/openchamber) | 75+ providers via [OpenCode](https://opencode.ai) | 3000 | UI password | OpenShift Route (browser) |
 
@@ -13,7 +13,7 @@ Packages AI-native code editors as native OpenShift Dev Spaces editors alongside
 - `podman` (or `docker`)
 - `oc` CLI authenticated to the Dev Spaces cluster
 - A container registry you can push to (the image must be **public** — Dev Spaces needs to pull it and you likely can't create image pull secrets on shared clusters)
-- Google Vertex AI project with Claude enabled (T3 Code; optional for OpenChamber)
+- Google Vertex AI project with Claude enabled (T3 Connect only; optional for OpenChamber)
 
 ## Configuration
 
@@ -135,14 +135,20 @@ oc exec $POD -c openchamber-runtime -n <your-namespace> -- cat /projects/.devspa
 
 ## LLM Provider Setup
 
-### T3 Code (Vertex AI)
+### T3 Code (Red Hat AI — automatic)
+
+T3 Code auto-discovers KServe InferenceServices in the cluster at startup and generates an `opencode.json` with all available models. No manual configuration needed — start a terminal in the workspace and run `opencode`, then pick a model with `/models`.
+
+The discovery script (`discover-models.sh`) uses `oc` to list InferenceServices in the `sandbox-shared-models` namespace (override with `REDHAT_AI_NAMESPACE`). Set `REDHAT_AI_NAMESPACE` in the devfile env vars to point at a different namespace.
+
+### T3 Connect (Vertex AI)
 
 Shell into the pod and authenticate with gcloud:
 
 ```bash
-POD=$(oc get pods -n <your-namespace> -l controller.devfile.io/devworkspace_name=t3-code-workspace --no-headers | grep -v cleanup | awk '{print $1}')
-oc exec -it $POD -c t3-code-runtime -n <your-namespace> -- bash
-export PATH=/t3code/npm-global/bin:/t3code/google-cloud-sdk/bin:$PATH
+POD=$(oc get pods -n <your-namespace> -l controller.devfile.io/devworkspace_name=t3-connect-workspace --no-headers | grep -v cleanup | awk '{print $1}')
+oc exec -it $POD -c t3-connect-runtime -n <your-namespace> -- bash
+export PATH=/t3connect/npm-global/bin:/t3connect/google-cloud-sdk/bin:$PATH
 gcloud auth application-default login --no-launch-browser
 ```
 
@@ -213,11 +219,13 @@ To remove: `make t3-unregister` / `make connect-unregister` / `make chamber-unre
 ├── config.env.example          # Template for local config.env
 ├── Makefile                    # Build, push, and cluster-wide registration
 ├── t3-code/
-│   ├── Containerfile           # UBI9 + Node.js 22 + T3 Code + Claude Code + gcloud
+│   ├── Containerfile           # UBI9 + Node.js 22 + T3 Code + OpenCode + gcloud
 │   ├── deploy.sh               # One-command deploy
 │   ├── teardown.sh             # Remove all workspace resources
 │   ├── entrypoint.sh           # Runtime startup with auto-restart
 │   ├── entrypoint-init-container.sh
+│   ├── bashrc.sh               # Shell prompt and CA cert trust
+│   ├── discover-models.sh      # KServe model discovery → opencode.json
 │   └── devfile.yaml            # Che editor definition template
 ├── t3-connect/
 │   ├── Containerfile           # UBI9 + Node.js 22 + T3 Code + Claude Code + gcloud
