@@ -6,15 +6,29 @@ if ! whoami &> /dev/null; then
   fi
 fi
 
-export CLAUDE_CODE_USE_VERTEX=true
 export PATH="/t3code/npm-global/bin:/t3code/google-cloud-sdk/bin:${PATH}"
 
+if [ -f /t3code/bashrc.sh ] && ! grep -q 't3code/bashrc.sh' "$HOME/.bashrc" 2>/dev/null; then
+  echo 'source /t3code/bashrc.sh' >> "$HOME/.bashrc"
+fi
+
+if [ -f /t3code/discover-models.sh ]; then
+  bash /t3code/discover-models.sh "${PROJECTS_ROOT:-/projects}/opencode.json"
+fi
+
+SA_CA=/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+if [ -f "$SA_CA" ]; then
+  mkdir -p "$HOME/.config/opencode"
+  cp "$SA_CA" "$HOME/.config/opencode/service-ca.crt"
+  export NODE_EXTRA_CA_CERTS="$HOME/.config/opencode/service-ca.crt"
+fi
+
 PERSIST="${PROJECTS_ROOT:-/projects}/.devspaces-t3code"
-mkdir -p "$PERSIST/gcloud" "$PERSIST/claude" "$PERSIST/t3code-home"
+mkdir -p "$PERSIST/gcloud" "$PERSIST/t3code-home"
 
 export CLOUDSDK_CONFIG="$PERSIST/gcloud"
-export CLAUDE_CONFIG_DIR="$PERSIST/claude"
 export T3CODE_HOME="$PERSIST/t3code-home"
+export NODE_OPTIONS="--unhandled-rejections=warn"
 
 cd ${PROJECTS_ROOT:-/projects}
 

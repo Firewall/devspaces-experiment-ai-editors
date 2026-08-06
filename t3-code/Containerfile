@@ -2,16 +2,18 @@ FROM registry.access.redhat.com/ubi9/nodejs-22 AS builder
 
 USER 0
 
-RUN dnf install -y git && dnf clean all
+RUN dnf install -y --disablerepo='*' --enablerepo='ubi-*' git && dnf clean all
 
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "aarch64" ]; then GCLOUD_ARCH="arm"; else GCLOUD_ARCH="x86_64"; fi && \
     curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
       | tar -xz -C /usr/lib
 
-RUN npm install -g t3 @anthropic-ai/claude-code
+RUN npm install -g t3@nightly opencode-ai
 
 COPY entrypoint.sh /usr/local/bin/t3code-entrypoint.sh
+COPY bashrc.sh /usr/local/bin/t3code-bashrc.sh
+COPY discover-models.sh /usr/local/bin/t3code-discover-models.sh
 COPY entrypoint-init-container.sh /entrypoint-init-container.sh
 
 RUN chgrp -R 0 /opt/app-root && \

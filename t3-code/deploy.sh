@@ -44,13 +44,7 @@ spec:
     - name: t3-code-runtime
       container:
         image: quay.io/devfile/universal-developer-image:latest
-        env:
-          - name: CLAUDE_CODE_USE_VERTEX
-            value: "1"
-          - name: GOOGLE_CLOUD_PROJECT
-            value: "${GOOGLE_CLOUD_PROJECT}"
-          - name: CLOUD_ML_REGION
-            value: "${CLOUD_ML_REGION}"
+        env: []
         volumeMounts:
           - name: t3code
             path: /t3code
