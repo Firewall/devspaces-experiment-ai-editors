@@ -1,0 +1,72 @@
+schemaVersion: 2.2.2
+
+metadata:
+  name: t3-connect/t3-connect-editor/latest
+  displayName: T3 Code + Claude (Connect)
+  description: AI-native coding environment via Cloudflare Tunnel (T3 Connect)
+  attributes:
+    publisher: t3-connect
+    version: latest
+    title: T3 Code + Claude — tunnel-based access via T3 Connect
+    firstPublicationDate: '2025-01-01'
+    repository: https://github.com/pingdotgg/t3code
+
+commands:
+  - id: init-t3-connect-injector
+    apply:
+      component: t3-connect-injector
+  - id: init-t3-connect-start
+    exec:
+      component: t3-connect-runtime
+      commandLine: >-
+        nohup /t3connect/entrypoint.sh > /t3connect/entrypoint-logs.txt 2>&1 &
+
+events:
+  preStart:
+    - init-t3-connect-injector
+  postStart:
+    - init-t3-connect-start
+
+components:
+  - name: t3-connect-injector
+    container:
+      image: ${T3_CONNECT_IMAGE}
+      command:
+        - /entrypoint-init-container.sh
+      volumeMounts:
+        - name: t3connect
+          path: /t3connect
+      memoryLimit: 256Mi
+      memoryRequest: 32Mi
+      cpuLimit: 500m
+      cpuRequest: 30m
+
+  - name: t3-connect-runtime
+    container:
+      image: quay.io/devfile/universal-developer-image:latest
+      env:
+        - name: CLAUDE_CODE_USE_VERTEX
+          value: "1"
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "${GOOGLE_CLOUD_PROJECT}"
+        - name: CLOUD_ML_REGION
+          value: "${CLOUD_ML_REGION}"
+      volumeMounts:
+        - name: t3connect
+          path: /t3connect
+      memoryLimit: 2048Mi
+      memoryRequest: 512Mi
+      cpuLimit: 1000m
+      cpuRequest: 100m
+      endpoints:
+        - name: t3-connect
+          targetPort: 3773
+          exposure: internal
+          protocol: https
+    attributes:
+      app.kubernetes.io/component: t3-connect-runtime
+      app.kubernetes.io/part-of: t3-connect.eclipse.org
+      controller.devfile.io/container-contribution: true
+
+  - name: t3connect
+    volume: {}
