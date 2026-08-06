@@ -5,7 +5,6 @@ Packages AI-native code editors as native OpenShift Dev Spaces editors alongside
 | Editor | AI Backend | Port | Auth | Access |
 |--------|-----------|------|------|--------|
 | [T3 Code](https://github.com/pingdotgg/t3code) | Red Hat AI (in-cluster KServe) via [OpenCode](https://opencode.ai) | 3773 | Pairing token | OpenShift Route (browser) |
-| [T3 Code (Connect)](https://github.com/pingdotgg/t3code) | Claude (Vertex AI) | 3773 | Clerk OAuth | Cloudflare Tunnel (T3 app) |
 | [OpenChamber](https://github.com/openchamber/openchamber) | 75+ providers via [OpenCode](https://opencode.ai) | 3000 | UI password | OpenShift Route (browser) |
 
 ## Prerequisites
@@ -13,7 +12,7 @@ Packages AI-native code editors as native OpenShift Dev Spaces editors alongside
 - `podman` (or `docker`)
 - `oc` CLI authenticated to the Dev Spaces cluster
 - A container registry you can push to (the image must be **public** — Dev Spaces needs to pull it and you likely can't create image pull secrets on shared clusters)
-- Google Vertex AI project with Claude enabled (T3 Connect only; optional for OpenChamber)
+- Google Vertex AI project with Claude enabled (optional for OpenChamber)
 
 ## Configuration
 
@@ -27,9 +26,6 @@ vi config.env
 ```env
 # --- T3 Code ---
 T3_IMAGE=quay.io/my-org/devspaces-t3-code-editor:latest
-
-# --- T3 Connect ---
-T3_CONNECT_IMAGE=quay.io/my-org/devspaces-t3-connect-editor:latest
 
 # --- OpenChamber ---
 OPENCHAMBER_IMAGE=quay.io/my-org/devspaces-openchamber-editor:latest
@@ -53,33 +49,6 @@ vi config.env
 
 Prints the T3 Code URL and pairing token when done. Tear down: `./t3-code/teardown.sh`
 
-## Quick Start — T3 Connect (no admin required)
-
-T3 Connect uses a Cloudflare Tunnel instead of an OpenShift Route. Access is via the [T3 Code](https://app.t3.codes/) desktop/mobile app.
-
-```bash
-cp config.env.example config.env
-vi config.env
-./t3-connect/deploy.sh
-```
-
-After the workspace starts, complete the one-time setup:
-
-**Terminal 1** — port-forward for OAuth callback:
-```bash
-oc port-forward <pod-name> 34338:34338 -n <namespace>
-```
-
-**Terminal 2** — authenticate and link:
-```bash
-oc exec -it <pod-name> -c t3-connect-runtime -n <namespace> -- bash
-export PATH=/t3connect/npm-global/bin:/t3connect/google-cloud-sdk/bin:$PATH
-t3 connect login
-t3 connect link
-```
-
-After linking, open the T3 Code app to access the workspace. Subsequent pod restarts auto-reconnect the tunnel. Tear down: `./t3-connect/teardown.sh`
-
 ## Quick Start — OpenChamber (no admin required)
 
 ```bash
@@ -94,7 +63,7 @@ OpenChamber supports 75+ LLM providers (Anthropic, OpenAI, Google, local models,
 
 ## What the deploy scripts do
 
-`t3-code/deploy.sh`, `t3-connect/deploy.sh`, and `openchamber/deploy.sh` follow the same steps (T3 Connect skips step 5 — no Route/Service since access is via tunnel):
+`t3-code/deploy.sh` and `openchamber/deploy.sh` follow the same steps:
 
 1. Build the container image for `linux/amd64` and push to your registry
 2. Create a `DevWorkspaceTemplate` (the editor definition) in your namespace
@@ -104,16 +73,6 @@ OpenChamber supports 75+ LLM providers (Anthropic, OpenAI, Google, local models,
 6. Print the URL and credentials (pairing token for T3 Code, UI password for OpenChamber)
 
 ## Authentication
-
-### T3 Connect — Clerk OAuth
-
-T3 Connect requires a one-time OAuth login. The deploy script prints the exact commands. The flow requires port-forwarding port 34338 from the pod to your local machine so the Clerk OAuth callback can reach you. After the initial setup, the tunnel auto-reconnects on pod restarts.
-
-To disconnect:
-```bash
-t3 connect unlink     # remove tunnel
-t3 connect logout     # remove Clerk auth
-```
 
 ### T3 Code — Pairing Token
 
@@ -141,17 +100,6 @@ T3 Code auto-discovers KServe InferenceServices in the cluster at startup and ge
 
 The discovery script (`discover-models.sh`) uses `oc` to list InferenceServices in the `sandbox-shared-models` namespace (override with `REDHAT_AI_NAMESPACE`). Set `REDHAT_AI_NAMESPACE` in the devfile env vars to point at a different namespace.
 
-### T3 Connect (Vertex AI)
-
-Shell into the pod and authenticate with gcloud:
-
-```bash
-POD=$(oc get pods -n <your-namespace> -l controller.devfile.io/devworkspace_name=t3-connect-workspace --no-headers | grep -v cleanup | awk '{print $1}')
-oc exec -it $POD -c t3-connect-runtime -n <your-namespace> -- bash
-export PATH=/t3connect/npm-global/bin:/t3connect/google-cloud-sdk/bin:$PATH
-gcloud auth application-default login --no-launch-browser
-```
-
 ### OpenChamber (any provider)
 
 OpenChamber supports 75+ LLM providers via OpenCode. Shell in and configure:
@@ -166,6 +114,8 @@ export PATH=/openchamber/npm-global/bin:/openchamber/google-cloud-sdk/bin:$PATH
 gcloud auth application-default login --no-launch-browser
 ```
 
+Both editors also auto-discover Red Hat AI models served via KServe on the cluster — no configuration needed for those.
+
 All credentials are persisted to the `/projects` volume — you only need to do this once per workspace lifetime.
 
 ## Cluster-wide Registration (requires admin)
@@ -176,14 +126,11 @@ Register editors in the dashboard editor picker for all users:
 # T3 Code
 make t3-register
 
-# T3 Connect
-make connect-register
-
 # OpenChamber
 make chamber-register
 ```
 
-To remove: `make t3-unregister` / `make connect-unregister` / `make chamber-unregister`.
+To remove: `make t3-unregister` / `make chamber-unregister`.
 
 ## Known Issues
 
@@ -200,12 +147,6 @@ To remove: `make t3-unregister` / `make connect-unregister` / `make chamber-unre
 - **Upstream issue** — Subpath routing: [#2310](https://github.com/pingdotgg/t3code/issues/2310).
 - **Version** — T3 Code is at v0.0.x. Expect breaking changes.
 
-### T3 Connect
-
-- **One-time OAuth** — The first `t3 connect login` requires a browser. In a headless pod, port 34338 must be port-forwarded via `oc port-forward` before running the login command.
-- **cloudflared port** — cloudflared connects outbound on port 7844. If the cluster's egress firewall blocks non-standard ports, the tunnel will fail to establish.
-- **State persistence** — T3 Connect and cloudflared state are persisted in `/projects/.devspaces-t3connect/`. If the `/projects` PVC is deleted, the tunnel must be re-established.
-
 ### OpenChamber
 
 - **Theme** — A pre-seeded Red Hat Dark theme is available. Activate via Settings → Theme → Reload themes → "Red Hat Dark".
@@ -218,22 +159,16 @@ To remove: `make t3-unregister` / `make connect-unregister` / `make chamber-unre
 ```
 ├── config.env.example          # Template for local config.env
 ├── Makefile                    # Build, push, and cluster-wide registration
+├── shared/
+│   ├── bashrc.sh               # Shell prompt and CA cert trust
+│   └── discover-models.sh      # KServe model discovery → opencode.json
 ├── t3-code/
 │   ├── Containerfile           # UBI9 + Node.js 22 + T3 Code + OpenCode + gcloud
 │   ├── deploy.sh               # One-command deploy
 │   ├── teardown.sh             # Remove all workspace resources
 │   ├── entrypoint.sh           # Runtime startup with auto-restart
 │   ├── entrypoint-init-container.sh
-│   ├── bashrc.sh               # Shell prompt and CA cert trust
-│   ├── discover-models.sh      # KServe model discovery → opencode.json
 │   └── devfile.yaml            # Che editor definition template
-├── t3-connect/
-│   ├── Containerfile           # UBI9 + Node.js 22 + T3 Code + Claude Code + gcloud
-│   ├── deploy.sh               # Deploy with Cloudflare Tunnel (no Route)
-│   ├── teardown.sh             # Remove workspace resources
-│   ├── entrypoint.sh           # Runtime startup with tunnel auto-reconnect
-│   ├── entrypoint-init-container.sh
-│   └── devfile.yaml            # Che editor definition (internal endpoint)
 └── openchamber/
     ├── Containerfile           # UBI9 + OpenChamber + OpenCode + gcloud
     ├── deploy.sh               # One-command deploy
