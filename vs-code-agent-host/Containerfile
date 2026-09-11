@@ -1,0 +1,48 @@
+FROM registry.access.redhat.com/ubi9/nodejs-22
+
+USER 0
+
+RUN dnf install -y --disablerepo='*' --enablerepo='ubi-*' git socat && \
+    curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz" \
+      | tar xz -C /usr/local/bin oc kubectl
+
+# Build bubblewrap from source (not in UBI repos)
+ENV BWRAP_VERSION=0.11.0
+RUN dnf install -y --disablerepo='*' --enablerepo='ubi-*' \
+      gcc meson libcap-devel && \
+    curl -sSL "https://github.com/containers/bubblewrap/releases/download/v${BWRAP_VERSION}/bubblewrap-${BWRAP_VERSION}.tar.xz" \
+      -o /tmp/bubblewrap.tar.xz && \
+    tar -xf /tmp/bubblewrap.tar.xz -C /tmp && \
+    cd /tmp/bubblewrap-${BWRAP_VERSION} && \
+    meson setup _build --prefix=/usr && \
+    meson compile -C _build && \
+    meson install -C _build && \
+    rm -rf /tmp/bubblewrap* && \
+    dnf remove -y gcc meson libcap-devel && \
+    dnf clean all && rm -rf /var/cache/dnf
+
+# Download pre-built VS Code CLI (Alpine/musl static binary)
+RUN curl -fsSL "https://code.visualstudio.com/sha/download?build=stable&os=cli-alpine-x64" \
+      -o /tmp/vscode-cli.tar.gz && \
+    tar xzf /tmp/vscode-cli.tar.gz -C /usr/local/bin && \
+    rm /tmp/vscode-cli.tar.gz && \
+    chmod +x /usr/local/bin/code
+
+# Google Cloud SDK
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then GCLOUD_ARCH="arm"; else GCLOUD_ARCH="x86_64"; fi && \
+    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
+      | tar -xz -C /usr/lib
+
+RUN npm install -g opencode-ai
+
+COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
+COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
+COPY vs-code-agent-host/discover-models-vscode.sh /usr/local/bin/discover-models-vscode.sh
+COPY vs-code-agent-host/entrypoint.sh /usr/local/bin/agent-host-entrypoint.sh
+
+RUN chgrp -R 0 /opt/app-root && \
+    chmod -R g=u /opt/app-root && \
+    chmod g=u /etc/passwd
+
+USER 1001

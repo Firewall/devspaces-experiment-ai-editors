@@ -11,8 +11,15 @@ CHAMBER_DIR = openchamber
 CHAMBER_CONFIGMAP ?= openchamber-editor-definition
 CHAMBER_DEVFILE = $(CHAMBER_DIR)/devfile.yaml
 
+# ---- VS Code Agent Host ----
+VSCODE_DIR = vs-code-agent-host
+VSCODE_CONFIGMAP ?= vs-code-agent-host-editor-definition
+VSCODE_DEVFILE = $(VSCODE_DIR)/devfile.yaml
+
 .PHONY: t3-build t3-push t3-register t3-unregister t3-devfile \
-        chamber-build chamber-push chamber-register chamber-unregister chamber-devfile
+        chamber-build chamber-push chamber-register chamber-unregister chamber-devfile \
+        vscode-build vscode-push vscode-deploy vscode-test vscode-teardown \
+        vscode-register vscode-unregister vscode-devfile
 
 # === T3 Code targets ===
 t3-build:
@@ -59,3 +66,35 @@ chamber-register: chamber-devfile
 
 chamber-unregister:
 	oc delete configmap $(CHAMBER_CONFIGMAP) -n $(NAMESPACE)
+
+# === VS Code Agent Host targets ===
+vscode-build:
+	podman build --platform linux/amd64 -f $(VSCODE_DIR)/Containerfile -t $(AGENT_HOST_IMAGE) .
+
+vscode-push:
+	podman push $(AGENT_HOST_IMAGE)
+
+vscode-devfile:
+	envsubst '$$AGENT_HOST_IMAGE' < $(VSCODE_DEVFILE) > $(VSCODE_DIR)/devfile-rendered.yaml
+
+vscode-register: vscode-devfile
+	oc create configmap $(VSCODE_CONFIGMAP) \
+	  --from-file=$(VSCODE_DIR)/devfile-rendered.yaml \
+	  -n $(NAMESPACE)
+	oc label configmap $(VSCODE_CONFIGMAP) \
+	  app.kubernetes.io/part-of=che.eclipse.org \
+	  app.kubernetes.io/component=editor-definition \
+	  -n $(NAMESPACE)
+	@rm -f $(VSCODE_DIR)/devfile-rendered.yaml
+
+vscode-deploy:
+	$(VSCODE_DIR)/deploy.sh
+
+vscode-test:
+	$(VSCODE_DIR)/test.sh
+
+vscode-teardown:
+	$(VSCODE_DIR)/teardown.sh
+
+vscode-unregister:
+	oc delete configmap $(VSCODE_CONFIGMAP) -n $(NAMESPACE)

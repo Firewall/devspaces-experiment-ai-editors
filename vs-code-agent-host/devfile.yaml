@@ -1,0 +1,38 @@
+schemaVersion: 2.2.2
+
+metadata:
+  name: vs-code-agent-host/vs-code-agent-host-editor/latest
+  displayName: VS Code Agent Host
+  description: VS Code Agent Host with BYOK models and bubblewrap sandboxing
+  attributes:
+    publisher: vs-code-agent-host
+    version: latest
+    title: VS Code Agent Host — AI agents on Red Hat AI
+    firstPublicationDate: '2026-09-01'
+
+components:
+  - name: vs-code-agent-host
+    container:
+      image: ${AGENT_HOST_IMAGE}
+      command:
+        - /bin/bash
+        - -c
+        - /usr/local/bin/agent-host-entrypoint.sh 2>&1 | tee /tmp/agent-host-logs.txt
+      memoryLimit: 4096Mi
+      memoryRequest: 1024Mi
+      cpuLimit: 2000m
+      cpuRequest: 200m
+      endpoints:
+        - name: agent-host
+          targetPort: 3773
+          exposure: public
+          protocol: https
+          secure: true
+          attributes:
+            type: main
+            cookiesAuthEnabled: true
+            discoverable: false
+            urlRewriteSupported: true
+    attributes:
+      app.kubernetes.io/component: vs-code-agent-host
+      app.kubernetes.io/part-of: vs-code-agent-host.eclipse.org
