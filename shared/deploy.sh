@@ -19,6 +19,20 @@ build_and_push_image() {
   podman push "$image"
 }
 
+render_devfile() (
+  export T3_IMAGE OPENCHAMBER_IMAGE ORCA_IMAGE AGENT_HOST_IMAGE \
+    GOOGLE_CLOUD_PROJECT CLOUD_ML_REGION OPENCHAMBER_UI_PASSWORD \
+    ORCA_PAIRING_ADDRESS REDHAT_AI_NAMESPACE
+  python3 "$REPO_ROOT/shared/render-devfile.py" "$@"
+)
+
+create_editor_template() {
+  local devfile="$1" editor="$2" manifest
+  manifest=$(render_devfile "$devfile" --template "$editor") || return 1
+  echo "Creating editor template..."
+  printf '%s\n' "$manifest" | oc apply -n "$NAMESPACE" -f -
+}
+
 create_workspace() {
   local workspace="$1" editor="$2"
   echo "Creating workspace..."

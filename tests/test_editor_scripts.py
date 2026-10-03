@@ -9,6 +9,8 @@ import sys
 import tempfile
 import unittest
 
+import yaml
+
 
 REPO = Path(__file__).resolve().parents[1]
 EDITORS = {
@@ -26,9 +28,11 @@ class EditorScriptTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         (self.root / "shared").mkdir()
         shutil.copyfile(REPO / "shared/deploy.sh", self.root / "shared/deploy.sh")
+        shutil.copyfile(REPO / "shared/render-devfile.py", self.root / "shared/render-devfile.py")
+        shutil.copyfile(REPO / "Makefile", self.root / "Makefile")
         for editor in EDITORS:
             (self.root / editor).mkdir()
-            for name in ("deploy.sh", "teardown.sh"):
+            for name in ("deploy.sh", "teardown.sh", "devfile.yaml"):
                 shutil.copyfile(REPO / editor / name, self.root / editor / name)
         (self.root / "config.env").write_text(
             "NAMESPACE=test-workspaces\n"
@@ -46,7 +50,7 @@ class EditorScriptTests(unittest.TestCase):
         self.log = self.root / "commands.jsonl"
         self.env = dict(
             os.environ,
-            PATH=f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+            PATH=f"{self.bin}{os.pathsep}{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}",
             TEST_COMMAND_LOG=str(self.log),
         )
         stub = f"#!{sys.executable}\n" + '''
@@ -117,7 +121,8 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 if editor == "orca":
                     self.assertIs(manifests[0], direct_route)
                     self.assertIn("wss://editor.test.example/", template)
-                    self.assertIn('value: "test-models"', template)
+                    runtime = yaml.safe_load(template)["spec"]["components"][1]["container"]
+                    self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": "test-models"}, runtime["env"])
                     self.assertIn("controller.devfile.io/devworkspace_name: orca-workspace", direct_route)
                 else:
                     self.assertIs(manifests[-1], direct_route)
@@ -129,6 +134,86 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 for entry in commands:
                     if entry["tool"] == "oc":
                         self.assertEqual(entry["args"][entry["args"].index("-n") + 1], "test-workspaces")
+
+    def register_devfile(self, editor):
+        prefix = {"t3-code": "t3", "openchamber": "chamber", "orca": "orca", "vs-code-agent-host": "vscode"}[editor]
+        result = subprocess.run(
+            ["make", f"{prefix}-devfile"], cwd=self.root, env=self.env,
+            capture_output=True, text=True, timeout=15,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        output = self.root / editor / "devfile-rendered.yaml"
+        self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+        return yaml.safe_load(output.read_text())
+
+    def test_deployment_and_registration_share_devfile_spec_and_defaults(self):
+        config = self.root / "config.env"
+        config.write_text(config.read_text().replace("REDHAT_AI_NAMESPACE=test-models\n", ""))
+        self.env.pop("REDHAT_AI_NAMESPACE", None)
+        self.env["ORCA_PAIRING_ADDRESS"] = "wss://editor.test.example/"
+        for editor in EDITORS:
+            with self.subTest(editor=editor):
+                result, commands = self.run_script(editor, "deploy.sh")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                template = next(yaml.safe_load(entry["manifest"]) for entry in commands if "manifest" in entry and "kind: DevWorkspaceTemplate\n" in entry["manifest"])
+                registered = self.register_devfile(editor)
+                self.assertIn("schemaVersion", registered)
+                self.assertIn("displayName", registered["metadata"])
+                spec = {key: value for key, value in registered.items() if key not in ("schemaVersion", "metadata")}
+                self.assertEqual(template["spec"], spec)
+                runtime = next(component["container"] for component in spec["components"] if "endpoints" in component.get("container", {}))
+                self.assertEqual(runtime["endpoints"][0]["attributes"]["type"], "main")
+                if editor == "orca":
+                    self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": "sandbox-shared-models"}, runtime["env"])
+
+    def test_devfile_edits_reach_both_deployment_and_registration(self):
+        for editor in EDITORS:
+            with self.subTest(editor=editor):
+                path = self.root / editor / "devfile.yaml"
+                source = yaml.safe_load(path.read_text())
+                runtime = next(component for component in source["components"] if "endpoints" in component.get("container", {}))
+                runtime["container"]["memoryLimit"] = "8192Mi"
+                command = {"id": "test-start", "exec": {"component": runtime["name"], "commandLine": 'echo "$PATH ${RUNTIME_ONLY}"'}}
+                source.setdefault("commands", []).append(command)
+                source.setdefault("events", {}).setdefault("postStart", []).append("test-start")
+                path.write_text(yaml.safe_dump(source, sort_keys=False))
+                result, commands = self.run_script(editor, "deploy.sh")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                template = next(yaml.safe_load(entry["manifest"]) for entry in commands if "manifest" in entry and "kind: DevWorkspaceTemplate\n" in entry["manifest"])
+                registered = self.register_devfile(editor)
+                for spec in (template["spec"], registered):
+                    rendered_runtime = next(component for component in spec["components"] if component["name"] == runtime["name"])
+                    self.assertEqual(rendered_runtime["container"]["memoryLimit"], "8192Mi")
+                    self.assertIn(command, spec["commands"])
+                    self.assertIn("test-start", spec["events"]["postStart"])
+
+    def test_special_password_characters_remain_a_single_literal_value(self):
+        password = 'quotes " and \'\n# comment\n${T3_IMAGE} `echo unsafe` $(echo unsafe)'
+        self.env["OPENCHAMBER_UI_PASSWORD"] = password
+        config = self.root / "config.env"
+        config.write_text(config.read_text().replace("OPENCHAMBER_UI_PASSWORD=test-password\n", ""))
+        result, commands = self.run_script("openchamber", "deploy.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        template = next(yaml.safe_load(entry["manifest"]) for entry in commands if "manifest" in entry and "kind: DevWorkspaceTemplate\n" in entry["manifest"])
+        for spec in (template["spec"], self.register_devfile("openchamber")):
+            runtime = next(component["container"] for component in spec["components"] if "endpoints" in component.get("container", {}))
+            self.assertIn({"name": "OPENCHAMBER_UI_PASSWORD", "value": password}, runtime["env"])
+
+    def test_invalid_devfile_stops_before_build_or_cluster_commands(self):
+        for editor in EDITORS:
+            with self.subTest(editor=editor):
+                (self.root / editor / "devfile.yaml").write_text("components: invalid\n")
+                result, commands = self.run_script(editor, "deploy.sh")
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(commands, [])
+
+    def test_failed_render_preserves_existing_registration_file(self):
+        output = self.root / "orca/devfile-rendered.yaml"
+        output.write_text("previous config\n")
+        (self.root / "orca/devfile.yaml").write_text("components: [\n")
+        result = subprocess.run(["make", "orca-devfile"], cwd=self.root, env=self.env, capture_output=True, text=True, timeout=15)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(output.read_text(), "previous config\n")
 
     def test_all_teardowns_only_remove_their_own_resources(self):
         for editor, (route, _, _) in EDITORS.items():

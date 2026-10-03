@@ -17,11 +17,20 @@ VS Code Agent Host exposes an agent service. Its URL is a service endpoint for a
 
 - An OpenShift cluster with Dev Spaces installed.
 - Bash and `podman` on your machine. The deploy scripts use Podman.
+- Python 3 and the dependency in `requirements.txt` for devfile rendering.
 - The `oc` CLI, logged in to the cluster.
 - Permission to create DevWorkspaces, DevWorkspaceTemplates, Services, and Routes in your Dev Spaces user namespace.
 - A registry you can push to and that workspace pods can pull from. A public image is convenient on shared clusters where you cannot configure pull credentials. Check [upstream terms](#license) before publishing images, particularly the VS Code integration.
 
-Cluster-wide editor registration additionally needs admin permissions and `envsubst`. Google Vertex AI is optional and requires a Google Cloud project with access to your chosen models.
+Cluster-wide editor registration additionally needs admin permissions. Google Vertex AI is optional and requires a Google Cloud project with access to your chosen models.
+
+Install the local renderer dependency in a virtual environment and activate it before running deployment, registration, or tests:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
+```
 
 ## Configure
 
@@ -171,7 +180,9 @@ OpenChamber includes a Red Hat Dark theme. Load it through Settings, Theme, Relo
 
 Each editor directory contains its `Containerfile`, `devfile.yaml`, `deploy.sh`, `teardown.sh`, and startup scripts. T3 Code, OpenChamber, and Orca inject their runtime into a universal developer image. VS Code Agent Host runs its own image directly.
 
-`shared/` contains deployment helpers, runtime setup, and KServe discovery. `config.env.example` documents local configuration. The `Makefile` provides build, push, and admin registration targets.
+Each `devfile.yaml` defines the editor components, commands, and events. Deployment and admin registration use the same renderer, so changes to those definitions belong in the devfile. The renderer substitutes configuration values and preserves runtime variables such as `$PATH`.
+
+`shared/` contains deployment helpers, the devfile renderer, runtime setup, and KServe discovery. `config.env.example` documents local configuration. The `Makefile` provides build, push, and admin registration targets.
 
 For local changes, check Bash syntax and run ShellCheck before testing a deployment. Keep credentials and rendered devfiles out of commits.
 

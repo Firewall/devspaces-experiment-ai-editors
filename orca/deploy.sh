@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$REPO_ROOT/shared/deploy.sh"
 load_config
 ORCA_IMAGE="${ORCA_IMAGE:?Set ORCA_IMAGE in config.env}"
+render_devfile "$REPO_ROOT/orca/devfile.yaml" --check
 
 echo "=== Deploying Orca to namespace: $NAMESPACE ==="
 
@@ -19,74 +20,7 @@ ROUTE_HOST=$(oc get route orca-direct -n "$NAMESPACE" -o jsonpath='{.spec.host}'
 ORCA_PAIRING_ADDRESS="wss://${ROUTE_HOST}/"
 
 # Step 3: DevWorkspaceTemplate
-echo "Creating editor template..."
-cat <<EOF | oc apply -n "$NAMESPACE" -f -
-apiVersion: workspace.devfile.io/v1alpha2
-kind: DevWorkspaceTemplate
-metadata:
-  name: orca-editor
-spec:
-  components:
-    - name: orca-injector
-      container:
-        image: ${ORCA_IMAGE}
-        command:
-          - /entrypoint-init-container.sh
-        volumeMounts:
-          - name: orca
-            path: /orca
-        memoryLimit: 512Mi
-        memoryRequest: 32Mi
-        cpuLimit: 500m
-        cpuRequest: 30m
-    - name: orca-runtime
-      container:
-        image: quay.io/devfile/universal-developer-image:latest
-        env:
-          - name: GOOGLE_CLOUD_PROJECT
-            value: "${GOOGLE_CLOUD_PROJECT}"
-          - name: CLOUD_ML_REGION
-            value: "${CLOUD_ML_REGION}"
-          - name: ORCA_PAIRING_ADDRESS
-            value: "${ORCA_PAIRING_ADDRESS}"
-          - name: REDHAT_AI_NAMESPACE
-            value: "${REDHAT_AI_NAMESPACE:-sandbox-shared-models}"
-        volumeMounts:
-          - name: orca
-            path: /orca
-        memoryLimit: 2048Mi
-        memoryRequest: 512Mi
-        cpuLimit: 1000m
-        cpuRequest: 100m
-        endpoints:
-          - name: orca
-            targetPort: 6768
-            exposure: public
-            protocol: https
-            secure: true
-            attributes:
-              cookiesAuthEnabled: true
-              discoverable: false
-              urlRewriteSupported: true
-      attributes:
-        controller.devfile.io/container-contribution: true
-    - name: orca
-      volume: {}
-  commands:
-    - id: init-orca-injector
-      apply:
-        component: orca-injector
-    - id: init-orca-start
-      exec:
-        component: orca-runtime
-        commandLine: >-
-          nohup /orca/entrypoint.sh > /orca/entrypoint-logs.txt 2>&1 &
-  events:
-    preStart:
-      - init-orca-injector
-    postStart:
-      - init-orca-start
-EOF
+create_editor_template "$REPO_ROOT/orca/devfile.yaml" "orca-editor"
 
 # Step 4: DevWorkspace
 create_workspace "orca-workspace" "orca-editor"

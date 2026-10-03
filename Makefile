@@ -1,7 +1,6 @@
 include config.env
 export
 .DEFAULT_GOAL := t3-build
-REDHAT_AI_NAMESPACE ?= sandbox-shared-models
 
 # ---- T3 Code ----
 T3_DIR = t3-code
@@ -41,7 +40,7 @@ t3-push:
 	podman push $(T3_IMAGE)
 
 t3-devfile:
-	envsubst '$$T3_IMAGE' < $(T3_DEVFILE) > $(T3_DIR)/devfile-rendered.yaml
+	python3 shared/render-devfile.py "$(T3_DEVFILE)" --output "$(T3_DIR)/devfile-rendered.yaml"
 
 t3-register: check-namespace t3-devfile
 	oc create configmap $(T3_CONFIGMAP) \
@@ -64,7 +63,7 @@ chamber-push:
 	podman push $(OPENCHAMBER_IMAGE)
 
 chamber-devfile:
-	envsubst '$$OPENCHAMBER_IMAGE $$GOOGLE_CLOUD_PROJECT $$CLOUD_ML_REGION $$OPENCHAMBER_UI_PASSWORD' < $(CHAMBER_DEVFILE) > $(CHAMBER_DIR)/devfile-rendered.yaml
+	python3 shared/render-devfile.py "$(CHAMBER_DEVFILE)" --output "$(CHAMBER_DIR)/devfile-rendered.yaml"
 
 chamber-register: check-namespace chamber-devfile
 	oc create configmap $(CHAMBER_CONFIGMAP) \
@@ -87,7 +86,7 @@ orca-push:
 	podman push $(ORCA_IMAGE)
 
 orca-devfile:
-	envsubst '$$ORCA_IMAGE $$GOOGLE_CLOUD_PROJECT $$CLOUD_ML_REGION $$ORCA_PAIRING_ADDRESS $$REDHAT_AI_NAMESPACE' < $(ORCA_DEVFILE) > $(ORCA_DIR)/devfile-rendered.yaml
+	python3 shared/render-devfile.py "$(ORCA_DEVFILE)" --output "$(ORCA_DIR)/devfile-rendered.yaml"
 
 orca-register: check-namespace orca-devfile
 	oc create configmap $(ORCA_CONFIGMAP) \
@@ -116,7 +115,7 @@ vscode-push:
 	podman push $(AGENT_HOST_IMAGE)
 
 vscode-devfile:
-	envsubst '$$AGENT_HOST_IMAGE' < $(VSCODE_DEVFILE) > $(VSCODE_DIR)/devfile-rendered.yaml
+	python3 shared/render-devfile.py "$(VSCODE_DEVFILE)" --output "$(VSCODE_DIR)/devfile-rendered.yaml"
 
 vscode-register: check-namespace vscode-devfile
 	oc create configmap $(VSCODE_CONFIGMAP) \

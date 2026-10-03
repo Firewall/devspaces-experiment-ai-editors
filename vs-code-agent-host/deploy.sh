@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$REPO_ROOT/shared/deploy.sh"
 load_config
 AGENT_HOST_IMAGE="${AGENT_HOST_IMAGE:?Set AGENT_HOST_IMAGE in config.env}"
+render_devfile "$REPO_ROOT/vs-code-agent-host/devfile.yaml" --check
 
 echo "=== Deploying VS Code Agent Host to namespace: $NAMESPACE ==="
 
@@ -13,36 +14,7 @@ echo "=== Deploying VS Code Agent Host to namespace: $NAMESPACE ==="
 build_and_push_image "$AGENT_HOST_IMAGE" "$REPO_ROOT/vs-code-agent-host"
 
 # Step 2: Create DevWorkspaceTemplate
-echo "Creating editor template..."
-cat <<EOF | oc apply -n "$NAMESPACE" -f -
-apiVersion: workspace.devfile.io/v1alpha2
-kind: DevWorkspaceTemplate
-metadata:
-  name: vs-code-agent-host-editor
-spec:
-  components:
-    - name: vs-code-agent-host
-      container:
-        image: ${AGENT_HOST_IMAGE}
-        command:
-          - /bin/bash
-          - -c
-          - /usr/local/bin/agent-host-entrypoint.sh 2>&1 | tee /tmp/agent-host-logs.txt
-        memoryLimit: 4096Mi
-        memoryRequest: 1024Mi
-        cpuLimit: 2000m
-        cpuRequest: 200m
-        endpoints:
-          - name: agent-host
-            targetPort: 3773
-            exposure: public
-            protocol: https
-            secure: true
-            attributes:
-              cookiesAuthEnabled: true
-              discoverable: false
-              urlRewriteSupported: true
-EOF
+create_editor_template "$REPO_ROOT/vs-code-agent-host/devfile.yaml" "vs-code-agent-host-editor"
 
 # Step 3: Create DevWorkspace
 create_workspace "vs-code-agent-host-workspace" "vs-code-agent-host-editor"

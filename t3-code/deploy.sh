@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$REPO_ROOT/shared/deploy.sh"
 load_config
 T3_IMAGE="${T3_IMAGE:?Set T3_IMAGE in config.env}"
+render_devfile "$REPO_ROOT/t3-code/devfile.yaml" --check
 
 echo "=== Deploying T3 Code to namespace: $NAMESPACE ==="
 
@@ -13,66 +14,7 @@ echo "=== Deploying T3 Code to namespace: $NAMESPACE ==="
 build_and_push_image "$T3_IMAGE" "$REPO_ROOT/t3-code"
 
 # Step 2: Create DevWorkspaceTemplate
-echo "Creating editor template..."
-cat <<EOF | oc apply -n "$NAMESPACE" -f -
-apiVersion: workspace.devfile.io/v1alpha2
-kind: DevWorkspaceTemplate
-metadata:
-  name: t3-code-editor
-spec:
-  components:
-    - name: t3-code-injector
-      container:
-        image: ${T3_IMAGE}
-        command:
-          - /entrypoint-init-container.sh
-        volumeMounts:
-          - name: t3code
-            path: /t3code
-        memoryLimit: 256Mi
-        memoryRequest: 32Mi
-        cpuLimit: 500m
-        cpuRequest: 30m
-    - name: t3-code-runtime
-      container:
-        image: quay.io/devfile/universal-developer-image:latest
-        env: []
-        volumeMounts:
-          - name: t3code
-            path: /t3code
-        memoryLimit: 2048Mi
-        memoryRequest: 512Mi
-        cpuLimit: 1000m
-        cpuRequest: 100m
-        endpoints:
-          - name: t3-code
-            targetPort: 3773
-            exposure: public
-            protocol: https
-            secure: true
-            attributes:
-              cookiesAuthEnabled: true
-              discoverable: false
-              urlRewriteSupported: true
-      attributes:
-        controller.devfile.io/container-contribution: true
-    - name: t3code
-      volume: {}
-  commands:
-    - id: init-t3-code-injector
-      apply:
-        component: t3-code-injector
-    - id: init-t3-code-start
-      exec:
-        component: t3-code-runtime
-        commandLine: >-
-          nohup /t3code/entrypoint.sh > /t3code/entrypoint-logs.txt 2>&1 &
-  events:
-    preStart:
-      - init-t3-code-injector
-    postStart:
-      - init-t3-code-start
-EOF
+create_editor_template "$REPO_ROOT/t3-code/devfile.yaml" "t3-code-editor"
 
 # Step 3: Create DevWorkspace
 create_workspace "t3-code-workspace" "t3-code-editor"

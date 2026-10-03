@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$REPO_ROOT/shared/deploy.sh"
 load_config
 OPENCHAMBER_IMAGE="${OPENCHAMBER_IMAGE:?Set OPENCHAMBER_IMAGE in config.env}"
+render_devfile "$REPO_ROOT/openchamber/devfile.yaml" --check
 
 echo "=== Deploying OpenChamber to namespace: $NAMESPACE ==="
 
@@ -13,72 +14,7 @@ echo "=== Deploying OpenChamber to namespace: $NAMESPACE ==="
 build_and_push_image "$OPENCHAMBER_IMAGE" "$REPO_ROOT/openchamber"
 
 # Step 2: DevWorkspaceTemplate
-echo "Creating editor template..."
-cat <<EOF | oc apply -n "$NAMESPACE" -f -
-apiVersion: workspace.devfile.io/v1alpha2
-kind: DevWorkspaceTemplate
-metadata:
-  name: openchamber-editor
-spec:
-  components:
-    - name: openchamber-injector
-      container:
-        image: ${OPENCHAMBER_IMAGE}
-        command:
-          - /entrypoint-init-container.sh
-        volumeMounts:
-          - name: openchamber
-            path: /openchamber
-        memoryLimit: 256Mi
-        memoryRequest: 32Mi
-        cpuLimit: 500m
-        cpuRequest: 30m
-    - name: openchamber-runtime
-      container:
-        image: quay.io/devfile/universal-developer-image:latest
-        env:
-          - name: GOOGLE_CLOUD_PROJECT
-            value: "${GOOGLE_CLOUD_PROJECT}"
-          - name: CLOUD_ML_REGION
-            value: "${CLOUD_ML_REGION}"
-          - name: OPENCHAMBER_UI_PASSWORD
-            value: "${OPENCHAMBER_UI_PASSWORD}"
-        volumeMounts:
-          - name: openchamber
-            path: /openchamber
-        memoryLimit: 2048Mi
-        memoryRequest: 512Mi
-        cpuLimit: 1000m
-        cpuRequest: 100m
-        endpoints:
-          - name: openchamber
-            targetPort: 3000
-            exposure: public
-            protocol: https
-            secure: true
-            attributes:
-              cookiesAuthEnabled: true
-              discoverable: false
-              urlRewriteSupported: true
-      attributes:
-        controller.devfile.io/container-contribution: true
-    - name: openchamber
-      volume: {}
-  commands:
-    - id: init-openchamber-injector
-      apply:
-        component: openchamber-injector
-    - id: init-openchamber-start
-      exec:
-        component: openchamber-runtime
-        commandLine: >-
-          nohup /openchamber/entrypoint.sh > /openchamber/entrypoint-logs.txt 2>&1 &
-  events:
-    preStart:
-      - init-openchamber-injector
-    postStart:
-      - init-openchamber-start
-EOF
+create_editor_template "$REPO_ROOT/openchamber/devfile.yaml" "openchamber-editor"
 
 # Step 3: DevWorkspace
 create_workspace "openchamber-workspace" "openchamber-editor"
