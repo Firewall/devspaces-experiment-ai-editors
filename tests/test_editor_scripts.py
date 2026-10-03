@@ -118,11 +118,13 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 self.assertIn(f"name: {route}\n", direct_route)
                 self.assertIn(f"targetPort: {port}\n", direct_route)
                 self.assertIn("insecureEdgeTerminationPolicy: Redirect", direct_route)
+                components = yaml.safe_load(template)["spec"]["components"]
+                runtime = next(component for component in components
+                               if component["name"] == (editor if editor == "vs-code-agent-host" else f"{editor}-runtime"))
+                self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": "test-models"}, runtime["container"]["env"])
                 if editor == "orca":
                     self.assertIs(manifests[0], direct_route)
                     self.assertIn("wss://editor.test.example/", template)
-                    runtime = yaml.safe_load(template)["spec"]["components"][1]["container"]
-                    self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": "test-models"}, runtime["env"])
                     self.assertIn("controller.devfile.io/devworkspace_name: orca-workspace", direct_route)
                 else:
                     self.assertIs(manifests[-1], direct_route)
@@ -134,6 +136,23 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 for entry in commands:
                     if entry["tool"] == "oc":
                         self.assertEqual(entry["args"][entry["args"].index("-n") + 1], "test-workspaces")
+
+    def test_all_deployments_leave_model_namespace_empty_when_unconfigured(self):
+        config = self.root / "config.env"
+        original = config.read_text()
+        self.env.pop("REDHAT_AI_NAMESPACE", None)
+        for setting in ("", "REDHAT_AI_NAMESPACE=\n"):
+            config.write_text(original.replace("REDHAT_AI_NAMESPACE=test-models\n", setting))
+            for editor in EDITORS:
+                with self.subTest(editor=editor, setting=setting):
+                    result, commands = self.run_script(editor, "deploy.sh")
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    template = next(entry["manifest"] for entry in commands
+                                    if "kind: DevWorkspaceTemplate\n" in entry.get("manifest", ""))
+                    components = yaml.safe_load(template)["spec"]["components"]
+                    runtime = next(component for component in components
+                                   if component["name"] == (editor if editor == "vs-code-agent-host" else f"{editor}-runtime"))
+                    self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": ""}, runtime["container"]["env"])
 
     def register_devfile(self, editor):
         prefix = {"t3-code": "t3", "openchamber": "chamber", "orca": "orca", "vs-code-agent-host": "vscode"}[editor]
@@ -163,8 +182,7 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 self.assertEqual(template["spec"], spec)
                 runtime = next(component["container"] for component in spec["components"] if "endpoints" in component.get("container", {}))
                 self.assertEqual(runtime["endpoints"][0]["attributes"]["type"], "main")
-                if editor == "orca":
-                    self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": "sandbox-shared-models"}, runtime["env"])
+                self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": ""}, runtime["env"])
 
     def test_devfile_edits_reach_both_deployment_and_registration(self):
         for editor in EDITORS:

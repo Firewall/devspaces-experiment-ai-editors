@@ -51,6 +51,8 @@ components:
           value: "${CLOUD_ML_REGION}"
         - name: OPENCHAMBER_UI_PASSWORD
           value: "${OPENCHAMBER_UI_PASSWORD}"
+        - name: REDHAT_AI_NAMESPACE
+          value: "${REDHAT_AI_NAMESPACE}"
       volumeMounts:
         - name: openchamber
           path: /openchamber

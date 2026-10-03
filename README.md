@@ -115,9 +115,9 @@ Keep passwords, pairing URLs, logs, and generated model configuration out of iss
 
 ### KServe model discovery
 
-The integrations look for KServe InferenceServices in `sandbox-shared-models`. The workspace service account needs permission to list them and authenticate to their model endpoints. Discovery generates `/projects/opencode.json`; VS Code Agent Host also generates `/projects/chatLanguageModels.json`.
+The integrations look for KServe InferenceServices in the namespace configured by `REDHAT_AI_NAMESPACE`. The workspace service account needs permission to list them and authenticate to their model endpoints. Discovery generates `/projects/opencode.json`; VS Code Agent Host also generates `/projects/chatLanguageModels.json`.
 
-For Orca, set `REDHAT_AI_NAMESPACE` in `config.env` before running `./orca/deploy.sh`. For the other integrations, add that environment variable to the runtime component in the relevant `deploy.sh` and `devfile.yaml`. The namespace default targets a shared sandbox setup and may not exist on your cluster.
+For any integration, set `REDHAT_AI_NAMESPACE` in `config.env` before running its `deploy.sh`. All deploy scripts and devfile registration targets pass it to the runtime container. There is no default namespace. Leave the setting empty to skip KServe model discovery.
 
 Discovery skips missing or unreachable services. If your cluster has no shared models, configure an OpenCode provider yourself. T3 Code, OpenChamber, and VS Code Agent Host generate a config that disables OpenCode's own tools for use as an editor backend. Orca keeps OpenCode's default tools and permissions.
 

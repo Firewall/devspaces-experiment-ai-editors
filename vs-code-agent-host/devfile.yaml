@@ -14,6 +14,9 @@ components:
   - name: vs-code-agent-host
     container:
       image: ${AGENT_HOST_IMAGE}
+      env:
+        - name: REDHAT_AI_NAMESPACE
+          value: "${REDHAT_AI_NAMESPACE}"
       command:
         - /bin/bash
         - -c

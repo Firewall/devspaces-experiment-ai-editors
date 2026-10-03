@@ -44,7 +44,9 @@ components:
   - name: t3-code-runtime
     container:
       image: quay.io/devfile/universal-developer-image:latest
-      env: []
+      env:
+        - name: REDHAT_AI_NAMESPACE
+          value: "${REDHAT_AI_NAMESPACE}"
       volumeMounts:
         - name: t3code
           path: /t3code

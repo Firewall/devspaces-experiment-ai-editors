@@ -102,6 +102,25 @@ class KServeDiscoveryTests(unittest.TestCase):
         self.assertEqual(self.discover("agent").returncode, 0)
         self.assertNotIn("tools", json.loads(self.output.read_text()))
 
+    def test_missing_namespace_skips_cluster_access_and_preserves_configs(self):
+        original = '{"provider":{"manual":{"name":"My provider"}}}\n'
+        vscode_output = self.root / "chatLanguageModels.json"
+        self.output.write_text(original)
+        vscode_output.write_text('[{"name":"Manual"}]')
+        for namespace in (None, ""):
+            with self.subTest(namespace=namespace):
+                if namespace is None:
+                    self.env.pop("REDHAT_AI_NAMESPACE", None)
+                else:
+                    self.env["REDHAT_AI_NAMESPACE"] = namespace
+                result = self.discover(vscode_output=vscode_output)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("REDHAT_AI_NAMESPACE not set, skipping", result.stdout)
+                self.assertEqual(self.output.read_text(), original)
+                self.assertEqual(vscode_output.read_text(), '[{"name":"Manual"}]')
+                self.assertFalse((self.root / "oc.log").exists())
+                self.assertFalse((self.root / "curl.log").exists())
+
     def test_no_services_preserves_existing_config(self):
         original = '{"provider":{"manual":{"name":"My provider"}}}\n'
         self.output.write_text(original)

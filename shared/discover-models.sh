@@ -3,7 +3,7 @@
 
 umask 077
 
-NS="${REDHAT_AI_NAMESPACE:-sandbox-shared-models}"
+NS="${REDHAT_AI_NAMESPACE:-}"
 OUT="${1:-${PROJECTS_ROOT:-/projects}/opencode.json}"
 PROFILE="${2:-backend}"
 VSCODE_OUT="${3:-}"
@@ -11,6 +11,8 @@ case "$PROFILE" in
   backend|agent) ;;
   *) echo "discover-models: profile must be backend or agent" >&2; exit 1 ;;
 esac
+
+[ -z "$NS" ] && { echo "discover-models: REDHAT_AI_NAMESPACE not set, skipping"; exit 0; }
 
 command -v oc &>/dev/null || { echo "discover-models: oc not found, skipping"; exit 0; }
 

@@ -19,7 +19,7 @@ DEFAULTS = {
     "CLOUD_ML_REGION": "",
     "OPENCHAMBER_UI_PASSWORD": "",
     "ORCA_PAIRING_ADDRESS": "",
-    "REDHAT_AI_NAMESPACE": "sandbox-shared-models",
+    "REDHAT_AI_NAMESPACE": "",
 }
 PLACEHOLDER = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
 
