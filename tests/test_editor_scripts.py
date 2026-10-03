@@ -21,6 +21,16 @@ EDITORS = {
 }
 
 
+def workspace_pod(name="workspace-pod", *, ready=True, created="2026-10-03T12:00:00Z", phase="Running", deleting=False):
+    metadata = {"name": name, "creationTimestamp": created}
+    if deleting:
+        metadata["deletionTimestamp"] = "2026-10-03T12:01:00Z"
+    return {"metadata": metadata, "status": {
+        "phase": phase,
+        "conditions": [{"type": "Ready", "status": "True" if ready else "False"}],
+    }}
+
+
 class EditorScriptTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="editor scripts ")
@@ -53,6 +63,16 @@ class EditorScriptTests(unittest.TestCase):
             PATH=f"{self.bin}{os.pathsep}{Path(sys.executable).parent}{os.pathsep}{os.environ['PATH']}",
             TEST_COMMAND_LOG=str(self.log),
         )
+        self.snapshots = self.root / "pod-snapshots.json"
+        self.env["TEST_POD_SNAPSHOTS"] = str(self.snapshots)
+        self.set_pod_snapshots([
+            workspace_pod("cleanup-job", created="2026-10-03T12:02:00Z"),
+            workspace_pod("old-pod", created="2026-10-03T12:02:00Z", deleting=True),
+            workspace_pod("completed-pod", created="2026-10-03T12:02:00Z", phase="Succeeded"),
+            workspace_pod("failed-pod", created="2026-10-03T12:02:00Z", phase="Failed"),
+            workspace_pod(),
+            workspace_pod("another-pod", ready=False, created="2026-10-03T11:00:00Z"),
+        ])
         stub = f"#!{sys.executable}\n" + '''
 import json, os, sys
 from pathlib import Path
@@ -65,18 +85,19 @@ with open(os.environ["TEST_COMMAND_LOG"], "a") as log:
     log.write(json.dumps(entry) + "\\n")
 if tool == "oc":
     if args[:2] == ["get", "pods"]:
-        print("cleanup-job 0/1 Completed 0 1m")
-        print("old-pod 0/1 Completed 0 1m")
-        print("workspace-pod 2/2 Running 0 1m")
-        print("another-pod 2/2 Running 0 1m")
+        if os.environ.get("TEST_PODS_FAILURE"):
+            print("Error from server (Forbidden): pods is forbidden", file=sys.stderr)
+            sys.exit(1)
+        snapshots = json.loads(Path(os.environ["TEST_POD_SNAPSHOTS"]).read_text())
+        calls = sum(json.loads(line)["args"][:2] == ["get", "pods"]
+                    for line in Path(os.environ["TEST_COMMAND_LOG"]).read_text().splitlines())
+        print(json.dumps({"items": snapshots[min(calls - 1, len(snapshots) - 1)]}))
     elif args[:2] == ["get", "pod"]:
         print("workspace-id")
     elif args[:2] == ["get", "route"]:
         print("editor.test.example")
     elif args[0] == "exec":
         print("https://editor.test.example/paired" if "node" in args else "test-token")
-    elif args[0] == "wait" and os.environ.get("TEST_WAIT_FAILURE"):
-        sys.exit(1)
 elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
     sys.exit(1)
 '''
@@ -88,6 +109,12 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
         sleep.write_text("#!/bin/sh\nexit 0\n")
         sleep.chmod(0o755)
 
+    def set_pod_snapshots(self, *snapshots):
+        self.snapshots.write_text(json.dumps(snapshots))
+
+    def command_log(self):
+        return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
+
     def run_script(self, editor, name):
         self.log.unlink(missing_ok=True)
         result = subprocess.run(
@@ -98,8 +125,16 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
             text=True,
             timeout=15,
         )
-        commands = [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
-        return result, commands
+        return result, self.command_log()
+
+    def wait_for_workspace(self, timeout="1s"):
+        self.log.unlink(missing_ok=True)
+        result = subprocess.run(
+            ["bash", "-ec", 'source "$1"; NAMESPACE=test-workspaces; wait_for_workspace orca-workspace "$2"; echo "Ready pod: $POD"',
+             "test", str(self.root / "shared/deploy.sh"), timeout],
+            env=self.env, capture_output=True, text=True, timeout=5,
+        )
+        return result, self.command_log()
 
     def test_all_deployments_keep_resource_names_ports_and_order(self):
         for editor, (route, port, timeout) in EDITORS.items():
@@ -129,10 +164,14 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 else:
                     self.assertIs(manifests[-1], direct_route)
                     self.assertIn("controller.devfile.io/devworkspace_id: workspace-id", direct_route)
-                waits = [entry["args"] for entry in commands if entry["tool"] == "oc" and entry["args"][0] == "wait"]
-                self.assertEqual(len(waits), 1)
-                self.assertIn("pod/workspace-pod", waits[0])
-                self.assertIn(f"--timeout={timeout}", waits[0])
+                polls = [entry["args"] for entry in commands if entry["tool"] == "oc" and entry["args"][:2] == ["get", "pods"]]
+                self.assertEqual(len(polls), 1)
+                self.assertIn(f"controller.devfile.io/devworkspace_name={editor}-workspace", polls[0])
+                self.assertEqual(polls[0][polls[0].index("-o") + 1], "json")
+                request_timeout = next(arg for arg in polls[0] if arg.startswith("--request-timeout="))
+                self.assertGreater(int(request_timeout.split("=")[1][:-1]), 0)
+                self.assertLessEqual(int(request_timeout.split("=")[1][:-1]), int(timeout[:-1]))
+                self.assertIn("Pod: workspace-pod", result.stdout)
                 for entry in commands:
                     if entry["tool"] == "oc":
                         self.assertEqual(entry["args"][entry["args"].index("-n") + 1], "test-workspaces")
@@ -266,13 +305,54 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 self.assertEqual(len(commands), 1)
                 self.assertEqual(commands[0]["args"][0], "build")
 
-    def test_failed_readiness_stops_before_pairing(self):
-        self.env["TEST_WAIT_FAILURE"] = "1"
+    def test_pod_query_failure_stops_before_pairing(self):
+        self.env["TEST_PODS_FAILURE"] = "1"
         for editor in EDITORS:
             with self.subTest(editor=editor):
                 result, commands = self.run_script(editor, "deploy.sh")
                 self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(commands[-1]["args"][0], "wait")
+                self.assertEqual(commands[-1]["args"][:2], ["get", "pods"])
+                self.assertIn("Forbidden", result.stderr)
+
+    def test_replaced_pod_is_used_for_orca_pairing(self):
+        self.set_pod_snapshots(
+            [workspace_pod("old-pod", ready=False)],
+            [],
+            [workspace_pod("replacement-pod", ready=False)],
+            [workspace_pod("replacement-pod")],
+        )
+        result, commands = self.run_script("orca", "deploy.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Pod: replacement-pod", result.stdout)
+        execs = [entry["args"] for entry in commands if entry["args"][0] == "exec"]
+        self.assertTrue(execs)
+        self.assertTrue(all("replacement-pod" in args for args in execs))
+
+    def test_newest_pod_must_be_ready_even_if_older_pod_is_ready(self):
+        old = workspace_pod("old-pod", created="2026-10-03T11:00:00Z")
+        self.set_pod_snapshots(
+            [old, workspace_pod("replacement-pod", ready=False)],
+            [old, workspace_pod("replacement-pod")],
+        )
+        result, commands = self.wait_for_workspace("5s")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Ready pod: replacement-pod", result.stdout)
+        self.assertEqual(len(commands), 2)
+
+    def test_readiness_timeout_is_shared_across_pod_replacements(self):
+        for snapshots in (
+            ([],),
+            ([workspace_pod(ready=False)],),
+            ([workspace_pod("old-pod", ready=False)], [], [workspace_pod("replacement-pod", ready=False)]),
+        ):
+            with self.subTest(snapshots=snapshots):
+                self.set_pod_snapshots(*snapshots)
+                result, commands = self.wait_for_workspace()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("was not ready within 1s", result.stderr)
+                self.assertNotIn("Ready pod:", result.stdout)
+                self.assertTrue(commands)
+                self.assertTrue(all("--request-timeout=1s" in entry["args"] for entry in commands))
 
     def test_runtime_registers_bashrc_once_with_private_permissions(self):
         home = self.root / "home"

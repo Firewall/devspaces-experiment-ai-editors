@@ -57,23 +57,51 @@ EOF
 
 wait_for_workspace() {
   local workspace="$1" timeout="${2:-180s}"
-  POD=""
-  echo "Waiting for workspace pod..."
-  for _ in $(seq 1 60); do
-    POD=$(oc get pods -n "$NAMESPACE" -l "controller.devfile.io/devworkspace_name=$workspace" --no-headers 2>/dev/null |
-      awk '$1 !~ /cleanup/ && $3 != "Completed" {print $1; exit}')
-    if [ -n "$POD" ]; then
-      echo "Pod: $POD"
-      break
-    fi
-    sleep 3
-  done
-  if [ -z "$POD" ]; then
-    echo "Workspace pod did not appear. Check: oc get devworkspace $workspace -n $NAMESPACE"
+  local timeout_seconds="${timeout%s}" deadline remaining pods selection pod ready last_pod=""
+  if [[ ! "$timeout_seconds" =~ ^[0-9]+$ ]] || [ "$timeout_seconds" -eq 0 ]; then
+    echo "Workspace timeout must be a positive number of seconds: $timeout" >&2
     return 1
   fi
-  echo "Waiting for containers to start..."
-  oc wait --for=condition=Ready "pod/$POD" -n "$NAMESPACE" --timeout="$timeout"
+  deadline=$((SECONDS + 10#$timeout_seconds))
+  POD=""
+  echo "Waiting for workspace pod..."
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    remaining=$((deadline - SECONDS))
+    if [ "$remaining" -le 0 ]; then break; fi
+    pods=$(oc get pods -n "$NAMESPACE" -l "controller.devfile.io/devworkspace_name=$workspace" \
+      -o json --request-timeout="${remaining}s") || return 1
+    # Re-select on every poll: applying a template can replace the previous pod.
+    selection=$(printf '%s\n' "$pods" | python3 -c '
+import json, sys
+pods = [pod for pod in json.load(sys.stdin)["items"]
+        if not pod["metadata"].get("deletionTimestamp")
+        and "cleanup" not in pod["metadata"]["name"]
+        and pod.get("status", {}).get("phase") not in ("Succeeded", "Failed")]
+if pods:
+    pod = max(pods, key=lambda pod: pod["metadata"].get("creationTimestamp", ""))
+    ready = any(condition.get("type") == "Ready" and condition.get("status") == "True"
+                for condition in pod.get("status", {}).get("conditions", []))
+    print(pod["metadata"]["name"], "ready" if ready else "pending")
+') || return 1
+    read -r pod ready <<< "$selection"
+    if [ -n "$pod" ] && [ "$pod" != "$last_pod" ]; then
+      echo "Pod: $pod"
+      echo "Waiting for containers to start..."
+      last_pod="$pod"
+    fi
+    if [ "$ready" = ready ]; then
+      POD="$pod"
+      echo "Pod ready: $POD"
+      return 0
+    fi
+    remaining=$((deadline - SECONDS))
+    if [ "$remaining" -gt 0 ]; then
+      if [ "$remaining" -gt 3 ]; then remaining=3; fi
+      sleep "$remaining"
+    fi
+  done
+  echo "Workspace $workspace was not ready within $timeout. Check: oc get devworkspace $workspace -n $NAMESPACE" >&2
+  return 1
 }
 
 create_direct_route() {
