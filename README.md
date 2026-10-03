@@ -19,7 +19,7 @@ VS Code Agent Host exposes an agent service. Its URL is a service endpoint for a
 - Bash and `podman` on your machine. The deploy scripts use Podman.
 - The `oc` CLI, logged in to the cluster.
 - Permission to create DevWorkspaces, DevWorkspaceTemplates, Services, and Routes in your Dev Spaces user namespace.
-- A registry you can push to and that workspace pods can pull from. A public image is convenient on shared clusters where you cannot configure pull credentials. Check [upstream terms](THIRD_PARTY.md) before publishing images, particularly the VS Code integration.
+- A registry you can push to and that workspace pods can pull from. A public image is convenient on shared clusters where you cannot configure pull credentials. Check [upstream terms](#license) before publishing images, particularly the VS Code integration.
 
 Cluster-wide editor registration additionally needs admin permissions and `envsubst`. Google Vertex AI is optional and requires a Google Cloud project with access to your chosen models.
 
@@ -175,4 +175,6 @@ For local changes, check Bash syntax and run ShellCheck before testing a deploym
 
 ## License
 
-The integration code is licensed under [MIT](LICENSE). See [THIRD_PARTY.md](THIRD_PARTY.md) for upstream licenses and the terms on downloaded binaries.
+The integration code is licensed under [MIT](LICENSE). [T3 Code](https://github.com/pingdotgg/t3code), [OpenChamber](https://github.com/openchamber/openchamber), [Orca](https://github.com/stablyai/orca), [OpenCode](https://github.com/anomalyco/opencode), and their dependencies keep their own licenses. Preserve upstream license files and notices when redistributing images.
+
+The Orca integration applies a small patch and includes its [upstream license](https://github.com/stablyai/orca/blob/v1.4.219/LICENSE) in the runtime image. VS Code binaries have separate [Microsoft product](https://code.visualstudio.com/license) and [server terms](https://code.visualstudio.com/license/server); review those before distributing an image or offering a hosted service.
