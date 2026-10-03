@@ -2,23 +2,15 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-if [ ! -f "$REPO_ROOT/config.env" ]; then
-  echo "config.env not found. Copy from config.env.example and fill in your values:"
-  echo "  cp config.env.example config.env"
-  exit 1
-fi
-source "$REPO_ROOT/config.env"
-
-NAMESPACE="${NAMESPACE:?Set NAMESPACE to your Dev Spaces user namespace in config.env}"
+# shellcheck source=shared/deploy.sh
+source "$REPO_ROOT/shared/deploy.sh"
+load_config
 OPENCHAMBER_IMAGE="${OPENCHAMBER_IMAGE:?Set OPENCHAMBER_IMAGE in config.env}"
 
 echo "=== Deploying OpenChamber to namespace: $NAMESPACE ==="
 
 # Step 1: Build and push
-echo "Building image for linux/amd64..."
-podman build --platform linux/amd64 -f "$(dirname "$0")/Containerfile" -t "$OPENCHAMBER_IMAGE" "$REPO_ROOT"
-echo "Pushing image..."
-podman push "$OPENCHAMBER_IMAGE"
+build_and_push_image "$OPENCHAMBER_IMAGE" "$REPO_ROOT/openchamber"
 
 # Step 2: DevWorkspaceTemplate
 echo "Creating editor template..."
@@ -89,73 +81,14 @@ spec:
 EOF
 
 # Step 3: DevWorkspace
-echo "Creating workspace..."
-cat <<EOF | oc apply -n "$NAMESPACE" -f -
-apiVersion: workspace.devfile.io/v1alpha2
-kind: DevWorkspace
-metadata:
-  name: openchamber-workspace
-  labels:
-    che.eclipse.org/devworkspace: "true"
-spec:
-  started: true
-  routingClass: che
-  contributions:
-    - name: editor
-      kubernetes:
-        name: openchamber-editor
-  template:
-    projects: []
-EOF
+create_workspace "openchamber-workspace" "openchamber-editor"
 
 # Step 4: Wait for pod
-echo "Waiting for workspace pod..."
-for _ in $(seq 1 60); do
-  POD=$(oc get pods -n "$NAMESPACE" -l controller.devfile.io/devworkspace_name=openchamber-workspace --no-headers 2>/dev/null | grep -v cleanup | grep -v Completed | awk '{print $1}')
-  if [ -n "$POD" ]; then
-    echo "Pod: $POD"
-    break
-  fi
-  sleep 3
-done
-
-if [ -z "$POD" ]; then
-  echo "No OpenChamber workspace pod appeared. Check DevWorkspace status with oc."
-  exit 1
-fi
-
-echo "Waiting for containers to start..."
-oc wait --for=condition=Ready "pod/$POD" -n "$NAMESPACE" --timeout=180s
+wait_for_workspace "openchamber-workspace" 180s
 
 # Step 5: Direct route (bypasses Che gateway subpath routing — same issue as T3 Code)
-echo "Creating direct route..."
 WS_ID=$(oc get pod "$POD" -n "$NAMESPACE" -o jsonpath='{.metadata.labels.controller\.devfile\.io/devworkspace_id}')
-cat <<EOF | oc apply -n "$NAMESPACE" -f -
-apiVersion: v1
-kind: Service
-metadata:
-  name: openchamber-direct
-spec:
-  selector:
-    controller.devfile.io/devworkspace_id: ${WS_ID}
-  ports:
-    - port: 3000
-      targetPort: 3000
----
-apiVersion: route.openshift.io/v1
-kind: Route
-metadata:
-  name: openchamber-direct
-spec:
-  to:
-    kind: Service
-    name: openchamber-direct
-  port:
-    targetPort: 3000
-  tls:
-    termination: edge
-    insecureEdgeTerminationPolicy: Redirect
-EOF
+create_direct_route "openchamber-direct" 3000 controller.devfile.io/devworkspace_id "$WS_ID"
 
 # Step 6: Get UI password
 echo "Waiting for OpenChamber to start..."

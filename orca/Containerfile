@@ -54,6 +54,7 @@ RUN npm install -g "opencode-ai@${OPENCODE_VERSION}" && \
 COPY --from=builder /src/orca/out/orcad /opt/orca/runtime
 COPY --from=builder /src/orca/out/web /opt/orca/web
 COPY --from=builder /src/orca/LICENSE /opt/orca/LICENSE
+COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
 COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
 COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
 COPY orca/entrypoint.sh /usr/local/bin/orca-entrypoint.sh

@@ -1,23 +1,11 @@
 #!/bin/bash
 
-umask 077
-
-# OpenShift containers run with an arbitrary UID in GID 0.
-if ! whoami &> /dev/null; then
-  if [ -w /etc/passwd ]; then
-    echo "default:x:$(id -u):0:default user:${HOME}:/sbin/nologin" >> /etc/passwd
-  fi
-fi
+# shellcheck source=shared/runtime.sh
+source /orca/runtime.sh
+setup_runtime /orca/bashrc.sh || exit 1
 
 export PATH="/orca/npm-global/bin:/orca/google-cloud-sdk/bin:${PATH}"
 export SHELL=/bin/bash
-
-if [ -f /orca/bashrc.sh ] && ! grep -q 'orca/bashrc.sh' "$HOME/.bashrc" 2>/dev/null; then
-  echo 'source /orca/bashrc.sh' >> "$HOME/.bashrc"
-fi
-
-SA_CA=/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
-[ -f "$SA_CA" ] && export NODE_EXTRA_CA_CERTS="$SA_CA"
 
 PERSIST="${PROJECTS_ROOT:-/projects}/.devspaces-orca"
 mkdir -p "$PERSIST/gcloud" "$PERSIST/orca-home" \

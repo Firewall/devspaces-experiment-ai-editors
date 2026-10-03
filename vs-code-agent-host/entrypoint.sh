@@ -1,28 +1,16 @@
 #!/bin/bash
 
-umask 077
-
-if ! whoami &> /dev/null; then
-  if [ -w /etc/passwd ]; then
-    echo "default:x:$(id -u):0:default user:${HOME}:/sbin/nologin" >> /etc/passwd
-  fi
-fi
+# shellcheck source=shared/runtime.sh
+source /usr/local/bin/shared-runtime.sh
+setup_runtime /usr/local/bin/shared-bashrc.sh || exit 1
 
 export PATH="/usr/lib/google-cloud-sdk/bin:${PATH}"
 
-if [ -f /usr/local/bin/shared-bashrc.sh ] && ! grep -q 'shared-bashrc.sh' "$HOME/.bashrc" 2>/dev/null; then
-  echo 'source /usr/local/bin/shared-bashrc.sh' >> "$HOME/.bashrc"
-fi
-
-SA_CA=/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
-[ -f "$SA_CA" ] && export NODE_EXTRA_CA_CERTS="$SA_CA"
-
 # Discover KServe models
 if [ -f /usr/local/bin/shared-discover-models.sh ]; then
-  bash /usr/local/bin/shared-discover-models.sh "${PROJECTS_ROOT:-/projects}/opencode.json"
-fi
-if [ -f /usr/local/bin/discover-models-vscode.sh ]; then
-  bash /usr/local/bin/discover-models-vscode.sh "${PROJECTS_ROOT:-/projects}/chatLanguageModels.json"
+  bash /usr/local/bin/shared-discover-models.sh \
+    "${PROJECTS_ROOT:-/projects}/opencode.json" backend \
+    "${PROJECTS_ROOT:-/projects}/chatLanguageModels.json"
 fi
 
 PERSIST="${PROJECTS_ROOT:-/projects}/.devspaces-agent-host"

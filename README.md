@@ -171,11 +171,11 @@ OpenChamber includes a Red Hat Dark theme. Load it through Settings, Theme, Relo
 
 Each editor directory contains its `Containerfile`, `devfile.yaml`, `deploy.sh`, `teardown.sh`, and startup scripts. T3 Code, OpenChamber, and Orca inject their runtime into a universal developer image. VS Code Agent Host runs its own image directly.
 
-`shared/` contains shell setup and KServe discovery. `config.env.example` documents local configuration. The `Makefile` provides build, push, and admin registration targets.
+`shared/` contains deployment helpers, runtime setup, and KServe discovery. `config.env.example` documents local configuration. The `Makefile` provides build, push, and admin registration targets.
 
 For local changes, check Bash syntax and run ShellCheck before testing a deployment. Keep credentials and rendered devfiles out of commits.
 
-Run the local KServe discovery checks with `python3 -m unittest discover -s tests`. They use mocked cluster responses and require Bash and Node.js.
+Run the local discovery and editor-script checks with `python3 -m unittest discover -s tests`. They mock cluster and build commands and require Bash and Node.js.
 
 ## License
 

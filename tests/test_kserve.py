@@ -25,6 +25,7 @@ class KServeDiscoveryTests(unittest.TestCase):
             REDHAT_AI_NAMESPACE="test-models",
             TEST_MODELS="isvc-code-model isvc-offline",
             TEST_OC_LOG=str(self.root / "oc.log"),
+            TEST_CURL_LOG=str(self.root / "curl.log"),
         )
         self.stub(
             "oc",
@@ -41,6 +42,7 @@ class KServeDiscoveryTests(unittest.TestCase):
         )
         self.stub(
             "curl",
+            'printf "%s\\n" "${*: -1}" >> "$TEST_CURL_LOG"\n'
             'case "${*: -1}" in\n'
             '  *isvc-code-model-predictor*) '
             "printf '%s\\n' "
@@ -54,10 +56,12 @@ class KServeDiscoveryTests(unittest.TestCase):
         path.write_text(f"#!/bin/bash\n{body}\n")
         path.chmod(0o755)
 
-    def discover(self, profile=None):
+    def discover(self, profile=None, vscode_output=None):
         args = ["bash", str(REPO / "shared/discover-models.sh"), str(self.output)]
-        if profile is not None:
-            args.append(profile)
+        if profile is not None or vscode_output is not None:
+            args.append(profile or "backend")
+        if vscode_output is not None:
+            args.append(str(vscode_output))
         return subprocess.run(args, env=self.env, capture_output=True, text=True)
 
     def test_backend_keeps_existing_tool_policy(self):
@@ -127,6 +131,38 @@ class KServeDiscoveryTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.output.exists())
         self.assertFalse((self.root / "oc.log").exists())
+
+    def test_both_formats_share_one_probe_and_keep_credentials_separate(self):
+        vscode_output = self.root / "chatLanguageModels.json"
+        vscode_output.write_text("[]")
+        vscode_output.chmod(0o644)
+        result = self.discover(vscode_output=vscode_output)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        opencode_model = json.loads(self.output.read_text())["provider"]["redhat"]["models"]["code-model"]
+        vscode_provider = json.loads(vscode_output.read_text())[0]
+        self.assertEqual(vscode_provider["apiKey"], "test-service-token")
+        self.assertEqual(vscode_provider["vendor"], "customendpoint")
+        vscode_model = vscode_provider["models"][0]
+        self.assertEqual(vscode_model["id"], opencode_model["id"])
+        self.assertEqual(vscode_model["name"], opencode_model["name"])
+        self.assertEqual(vscode_model["url"], opencode_model["provider"]["api"] + "/chat/completions")
+        self.assertEqual(vscode_model["maxInputTokens"], opencode_model["limit"]["context"])
+        self.assertEqual(vscode_output.stat().st_mode & 0o777, 0o600)
+        self.assertNotIn("test-service-token", self.output.read_text())
+        self.assertNotIn("test-service-token", result.stdout + result.stderr)
+        self.assertEqual(len((self.root / "curl.log").read_text().splitlines()), 2)
+        self.assertEqual(len((self.root / "oc.log").read_text().splitlines()), 1)
+
+    def test_cluster_error_preserves_both_configs(self):
+        vscode_output = self.root / "chatLanguageModels.json"
+        self.output.write_text('{"provider":{}}')
+        vscode_output.write_text('[{"name":"Manual"}]')
+        self.stub("oc", "exit 1")
+        result = self.discover(vscode_output=vscode_output)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(self.output.read_text(), '{"provider":{}}')
+        self.assertEqual(vscode_output.read_text(), '[{"name":"Manual"}]')
+        self.assertFalse((self.root / "curl.log").exists())
 
 
 if __name__ == "__main__":

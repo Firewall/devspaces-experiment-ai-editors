@@ -13,6 +13,7 @@ ARG T3_VERSION=0.0.46-nightly.20261003.2610
 ARG OPENCODE_VERSION=1.18.34
 RUN npm install -g "t3@${T3_VERSION}" "opencode-ai@${OPENCODE_VERSION}"
 
+COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
 COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
 COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
 COPY t3-code/entrypoint.sh /usr/local/bin/t3code-entrypoint.sh

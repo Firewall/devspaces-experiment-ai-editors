@@ -2,52 +2,18 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-if [ ! -f "$REPO_ROOT/config.env" ]; then
-  echo "config.env not found. Copy from config.env.example and fill in your values:"
-  echo "  cp config.env.example config.env"
-  exit 1
-fi
-source "$REPO_ROOT/config.env"
-
-NAMESPACE="${NAMESPACE:?Set NAMESPACE in config.env}"
+# shellcheck source=shared/deploy.sh
+source "$REPO_ROOT/shared/deploy.sh"
+load_config
 ORCA_IMAGE="${ORCA_IMAGE:?Set ORCA_IMAGE in config.env}"
 
 echo "=== Deploying Orca to namespace: $NAMESPACE ==="
 
 # Step 1: Build and push
-echo "Building image for linux/amd64..."
-podman build --platform linux/amd64 -f "$(dirname "$0")/Containerfile" -t "$ORCA_IMAGE" "$REPO_ROOT"
-echo "Pushing image..."
-podman push "$ORCA_IMAGE"
+build_and_push_image "$ORCA_IMAGE" "$REPO_ROOT/orca"
 
 # Step 2: Create the direct route before startup so pairing advertises its hostname.
-echo "Creating direct route..."
-cat <<EOF | oc apply -n "$NAMESPACE" -f -
-apiVersion: v1
-kind: Service
-metadata:
-  name: orca-direct
-spec:
-  selector:
-    controller.devfile.io/devworkspace_name: orca-workspace
-  ports:
-    - port: 6768
-      targetPort: 6768
----
-apiVersion: route.openshift.io/v1
-kind: Route
-metadata:
-  name: orca-direct
-spec:
-  to:
-    kind: Service
-    name: orca-direct
-  port:
-    targetPort: 6768
-  tls:
-    termination: edge
-    insecureEdgeTerminationPolicy: Redirect
-EOF
+create_direct_route "orca-direct" 6768 controller.devfile.io/devworkspace_name "orca-workspace"
 
 ROUTE_HOST=$(oc get route orca-direct -n "$NAMESPACE" -o jsonpath='{.spec.host}')
 ORCA_PAIRING_ADDRESS="wss://${ROUTE_HOST}/"
@@ -123,42 +89,10 @@ spec:
 EOF
 
 # Step 4: DevWorkspace
-echo "Creating workspace..."
-cat <<EOF | oc apply -n "$NAMESPACE" -f -
-apiVersion: workspace.devfile.io/v1alpha2
-kind: DevWorkspace
-metadata:
-  name: orca-workspace
-  labels:
-    che.eclipse.org/devworkspace: "true"
-spec:
-  started: true
-  routingClass: che
-  contributions:
-    - name: editor
-      kubernetes:
-        name: orca-editor
-  template:
-    projects: []
-EOF
+create_workspace "orca-workspace" "orca-editor"
 
 # Step 5: Wait for the workspace pod
-echo "Waiting for workspace pod..."
-for _ in $(seq 1 60); do
-  POD=$(oc get pods -n "$NAMESPACE" -l controller.devfile.io/devworkspace_name=orca-workspace --no-headers 2>/dev/null | grep -v cleanup | grep -v Completed | awk 'NR == 1 {print $1}')
-  if [ -n "$POD" ]; then
-    echo "Pod: $POD"
-    break
-  fi
-  sleep 3
-done
-if [ -z "$POD" ]; then
-  echo "Orca workspace pod did not appear. Check: oc get devworkspace orca-workspace -n $NAMESPACE"
-  exit 1
-fi
-
-echo "Waiting for containers to start..."
-oc wait --for=condition=Ready "pod/$POD" -n "$NAMESPACE" --timeout=180s
+wait_for_workspace "orca-workspace" 180s
 
 # Step 6: Read the browser pairing URL from Orca's readiness contract.
 echo "Waiting for Orca to start..."

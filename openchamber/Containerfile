@@ -13,8 +13,10 @@ ARG OPENCHAMBER_VERSION=2.1.0
 ARG OPENCODE_VERSION=1.18.34
 RUN npm install -g "@openchamber/web@${OPENCHAMBER_VERSION}" "opencode-ai@${OPENCODE_VERSION}"
 
+COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
 COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
 COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
+COPY openchamber/redhat-dark.json /opt/openchamber/redhat-dark.json
 COPY openchamber/entrypoint.sh /usr/local/bin/openchamber-entrypoint.sh
 COPY openchamber/entrypoint-init-container.sh /entrypoint-init-container.sh
 

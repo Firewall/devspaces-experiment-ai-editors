@@ -1,21 +1,10 @@
 #!/bin/bash
 
-umask 077
-
-if ! whoami &> /dev/null; then
-  if [ -w /etc/passwd ]; then
-    echo "default:x:$(id -u):0:default user:${HOME}:/sbin/nologin" >> /etc/passwd
-  fi
-fi
+# shellcheck source=shared/runtime.sh
+source /t3code/runtime.sh
+setup_runtime /t3code/bashrc.sh || exit 1
 
 export PATH="/t3code/npm-global/bin:/t3code/google-cloud-sdk/bin:${PATH}"
-
-if [ -f /t3code/bashrc.sh ] && ! grep -q 't3code/bashrc.sh' "$HOME/.bashrc" 2>/dev/null; then
-  echo 'source /t3code/bashrc.sh' >> "$HOME/.bashrc"
-fi
-
-SA_CA=/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
-[ -f "$SA_CA" ] && export NODE_EXTRA_CA_CERTS="$SA_CA"
 
 if [ -f /t3code/discover-models.sh ]; then
   bash /t3code/discover-models.sh "${PROJECTS_ROOT:-/projects}/opencode.json"

@@ -1,9 +1,12 @@
 #!/bin/bash
-# Discovers KServe InferenceServices and generates opencode.json for Red Hat AI models.
+# Discovers KServe models for OpenCode and an optional VS Code output file.
+
+umask 077
 
 NS="${REDHAT_AI_NAMESPACE:-sandbox-shared-models}"
 OUT="${1:-${PROJECTS_ROOT:-/projects}/opencode.json}"
 PROFILE="${2:-backend}"
+VSCODE_OUT="${3:-}"
 case "$PROFILE" in
   backend|agent) ;;
   *) echo "discover-models: profile must be backend or agent" >&2; exit 1 ;;
@@ -37,10 +40,12 @@ PROBES+="]"
 
 [ "$PROBES" = "[]" ] && { echo "discover-models: no reachable models"; exit 0; }
 
-PROBES="$PROBES" DISCOVERY_PROFILE="$PROFILE" node - "$OUT" <<'EOF'
+PROBES="$PROBES" DISCOVERY_PROFILE="$PROFILE" VSCODE_API_KEY="${VSCODE_OUT:+$TOKEN}" \
+  node - "$OUT" "$VSCODE_OUT" <<'EOF'
 const fs = require('fs');
 const data = JSON.parse(process.env.PROBES);
 const models = {};
+const vscodeModels = [];
 let first = null;
 
 for (const { isvc, url, resp } of data) {
@@ -67,6 +72,14 @@ for (const { isvc, url, resp } of data) {
     provider: { api: url },
     limit: { context: m.max_model_len || 65536, output: 8192 },
   };
+  vscodeModels.push({
+    id: m.id,
+    name: label,
+    url: `${url}/chat/completions`,
+    toolCalling: true,
+    maxInputTokens: models[key].limit.context,
+    maxOutputTokens: models[key].limit.output,
+  });
 }
 
 if (!first) process.exit(0);
@@ -101,4 +114,20 @@ if (process.env.DISCOVERY_PROFILE === 'backend') {
 fs.writeFileSync(process.argv[2], JSON.stringify(config, null, 2) + '\n');
 
 console.error(`discover-models: wrote ${Object.keys(models).length} model(s) to ${process.argv[2]}`);
+
+const vscodeOut = process.argv[3];
+if (vscodeOut) {
+  const vscodeConfig = [{
+    name: 'Red Hat AI',
+    vendor: 'customendpoint',
+    apiKey: process.env.VSCODE_API_KEY.trim(),
+    apiType: 'chat-completions',
+    models: vscodeModels,
+  }];
+  // VS Code requires the credential in its config, including on existing volumes.
+  if (fs.existsSync(vscodeOut)) fs.chmodSync(vscodeOut, 0o600);
+  fs.writeFileSync(vscodeOut, JSON.stringify(vscodeConfig, null, 2) + '\n', { mode: 0o600 });
+  fs.chmodSync(vscodeOut, 0o600);
+  console.error(`discover-models: wrote ${vscodeModels.length} model(s) to ${vscodeOut}`);
+}
 EOF

@@ -37,9 +37,9 @@ RUN ARCH=$(uname -m) && \
 ARG OPENCODE_VERSION=1.18.34
 RUN npm install -g "opencode-ai@${OPENCODE_VERSION}"
 
+COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
 COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
 COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
-COPY vs-code-agent-host/discover-models-vscode.sh /usr/local/bin/discover-models-vscode.sh
 COPY vs-code-agent-host/entrypoint.sh /usr/local/bin/agent-host-entrypoint.sh
 
 RUN chgrp -R 0 /opt/app-root && \

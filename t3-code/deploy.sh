@@ -1,25 +1,16 @@
 #!/bin/bash
 set -e
 
-# Load config from repo root
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-if [ ! -f "$REPO_ROOT/config.env" ]; then
-  echo "config.env not found. Copy from config.env.example and fill in your values:"
-  echo "  cp config.env.example config.env"
-  exit 1
-fi
-source "$REPO_ROOT/config.env"
-
-NAMESPACE="${NAMESPACE:?Set NAMESPACE to your Dev Spaces user namespace in config.env}"
+# shellcheck source=shared/deploy.sh
+source "$REPO_ROOT/shared/deploy.sh"
+load_config
 T3_IMAGE="${T3_IMAGE:?Set T3_IMAGE in config.env}"
 
 echo "=== Deploying T3 Code to namespace: $NAMESPACE ==="
 
 # Step 1: Build and push image
-echo "Building image for linux/amd64..."
-podman build --platform linux/amd64 -f "$(dirname "$0")/Containerfile" -t "$T3_IMAGE" "$REPO_ROOT"
-echo "Pushing image..."
-podman push "$T3_IMAGE"
+build_and_push_image "$T3_IMAGE" "$REPO_ROOT/t3-code"
 
 # Step 2: Create DevWorkspaceTemplate
 echo "Creating editor template..."
@@ -84,73 +75,14 @@ spec:
 EOF
 
 # Step 3: Create DevWorkspace
-echo "Creating workspace..."
-cat <<EOF | oc apply -n "$NAMESPACE" -f -
-apiVersion: workspace.devfile.io/v1alpha2
-kind: DevWorkspace
-metadata:
-  name: t3-code-workspace
-  labels:
-    che.eclipse.org/devworkspace: "true"
-spec:
-  started: true
-  routingClass: che
-  contributions:
-    - name: editor
-      kubernetes:
-        name: t3-code-editor
-  template:
-    projects: []
-EOF
+create_workspace "t3-code-workspace" "t3-code-editor"
 
 # Step 4: Wait for pod
-echo "Waiting for workspace pod..."
-for _ in $(seq 1 60); do
-  POD=$(oc get pods -n "$NAMESPACE" -l controller.devfile.io/devworkspace_name=t3-code-workspace --no-headers 2>/dev/null | grep -v cleanup | grep -v Completed | awk '{print $1}')
-  if [ -n "$POD" ]; then
-    echo "Pod: $POD"
-    break
-  fi
-  sleep 3
-done
-
-if [ -z "$POD" ]; then
-  echo "No T3 Code workspace pod appeared. Check DevWorkspace status with oc."
-  exit 1
-fi
-
-echo "Waiting for containers to start..."
-oc wait --for=condition=Ready "pod/$POD" -n "$NAMESPACE" --timeout=180s
+wait_for_workspace "t3-code-workspace" 180s
 
 # Step 5: Create direct route (bypasses Che gateway subpath routing)
-echo "Creating direct route..."
 WS_ID=$(oc get pod "$POD" -n "$NAMESPACE" -o jsonpath='{.metadata.labels.controller\.devfile\.io/devworkspace_id}')
-cat <<EOF | oc apply -n "$NAMESPACE" -f -
-apiVersion: v1
-kind: Service
-metadata:
-  name: t3-code-direct
-spec:
-  selector:
-    controller.devfile.io/devworkspace_id: ${WS_ID}
-  ports:
-    - port: 3773
-      targetPort: 3773
----
-apiVersion: route.openshift.io/v1
-kind: Route
-metadata:
-  name: t3-code-direct
-spec:
-  to:
-    kind: Service
-    name: t3-code-direct
-  port:
-    targetPort: 3773
-  tls:
-    termination: edge
-    insecureEdgeTerminationPolicy: Redirect
-EOF
+create_direct_route "t3-code-direct" 3773 controller.devfile.io/devworkspace_id "$WS_ID"
 
 # Step 6: Get pairing token
 echo "Waiting for T3 Code to start..."
