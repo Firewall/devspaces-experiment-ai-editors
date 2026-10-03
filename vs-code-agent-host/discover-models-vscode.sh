@@ -1,6 +1,8 @@
 #!/bin/bash
 # Discovers KServe InferenceServices and generates chatLanguageModels.json for VS Code BYOK.
 
+umask 077
+
 NS="${REDHAT_AI_NAMESPACE:-sandbox-shared-models}"
 OUT="${1:-${PROJECTS_ROOT:-/projects}/chatLanguageModels.json}"
 
@@ -76,6 +78,9 @@ const config = [{
   models: models,
 }];
 
-fs.writeFileSync(process.argv[2], JSON.stringify(config, null, 2) + '\n');
+// This file contains a service account credential, including on existing volumes.
+if (fs.existsSync(process.argv[2])) fs.chmodSync(process.argv[2], 0o600);
+fs.writeFileSync(process.argv[2], JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+fs.chmodSync(process.argv[2], 0o600);
 console.error(`discover-models-vscode: wrote ${models.length} model(s) to ${process.argv[2]}`);
 EOF

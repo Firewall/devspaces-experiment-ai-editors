@@ -1,5 +1,6 @@
 include config.env
 export
+.DEFAULT_GOAL := t3-build
 
 # ---- T3 Code ----
 T3_DIR = t3-code
@@ -21,12 +22,15 @@ VSCODE_DIR = vs-code-agent-host
 VSCODE_CONFIGMAP ?= vs-code-agent-host-editor-definition
 VSCODE_DEVFILE = $(VSCODE_DIR)/devfile.yaml
 
-.PHONY: t3-build t3-push t3-register t3-unregister t3-devfile \
+.PHONY: check-namespace t3-build t3-push t3-register t3-unregister t3-devfile \
         chamber-build chamber-push chamber-register chamber-unregister chamber-devfile \
         orca-build orca-push orca-register orca-unregister orca-devfile \
         orca-deploy orca-teardown \
         vscode-build vscode-push vscode-deploy vscode-test vscode-teardown \
         vscode-register vscode-unregister vscode-devfile
+
+check-namespace:
+	@test -n "$(NAMESPACE)" || { echo "Set NAMESPACE in config.env before registering or removing editors."; exit 1; }
 
 # === T3 Code targets ===
 t3-build:
@@ -38,7 +42,7 @@ t3-push:
 t3-devfile:
 	envsubst '$$T3_IMAGE' < $(T3_DEVFILE) > $(T3_DIR)/devfile-rendered.yaml
 
-t3-register: t3-devfile
+t3-register: check-namespace t3-devfile
 	oc create configmap $(T3_CONFIGMAP) \
 	  --from-file=$(T3_DIR)/devfile-rendered.yaml \
 	  -n $(NAMESPACE)
@@ -48,7 +52,7 @@ t3-register: t3-devfile
 	  -n $(NAMESPACE)
 	@rm -f $(T3_DIR)/devfile-rendered.yaml
 
-t3-unregister:
+t3-unregister: check-namespace
 	oc delete configmap $(T3_CONFIGMAP) -n $(NAMESPACE)
 
 # === OpenChamber targets ===
@@ -61,7 +65,7 @@ chamber-push:
 chamber-devfile:
 	envsubst '$$OPENCHAMBER_IMAGE $$GOOGLE_CLOUD_PROJECT $$CLOUD_ML_REGION $$OPENCHAMBER_UI_PASSWORD' < $(CHAMBER_DEVFILE) > $(CHAMBER_DIR)/devfile-rendered.yaml
 
-chamber-register: chamber-devfile
+chamber-register: check-namespace chamber-devfile
 	oc create configmap $(CHAMBER_CONFIGMAP) \
 	  --from-file=$(CHAMBER_DIR)/devfile-rendered.yaml \
 	  -n $(NAMESPACE)
@@ -71,7 +75,7 @@ chamber-register: chamber-devfile
 	  -n $(NAMESPACE)
 	@rm -f $(CHAMBER_DIR)/devfile-rendered.yaml
 
-chamber-unregister:
+chamber-unregister: check-namespace
 	oc delete configmap $(CHAMBER_CONFIGMAP) -n $(NAMESPACE)
 
 # === Orca targets ===
@@ -84,7 +88,7 @@ orca-push:
 orca-devfile:
 	envsubst '$$ORCA_IMAGE $$GOOGLE_CLOUD_PROJECT $$CLOUD_ML_REGION $$ORCA_PAIRING_ADDRESS' < $(ORCA_DEVFILE) > $(ORCA_DIR)/devfile-rendered.yaml
 
-orca-register: orca-devfile
+orca-register: check-namespace orca-devfile
 	oc create configmap $(ORCA_CONFIGMAP) \
 	  --from-file=$(ORCA_DIR)/devfile-rendered.yaml \
 	  -n $(NAMESPACE)
@@ -100,7 +104,7 @@ orca-deploy:
 orca-teardown:
 	$(ORCA_DIR)/teardown.sh
 
-orca-unregister:
+orca-unregister: check-namespace
 	oc delete configmap $(ORCA_CONFIGMAP) -n $(NAMESPACE)
 
 # === VS Code Agent Host targets ===
@@ -113,7 +117,7 @@ vscode-push:
 vscode-devfile:
 	envsubst '$$AGENT_HOST_IMAGE' < $(VSCODE_DEVFILE) > $(VSCODE_DIR)/devfile-rendered.yaml
 
-vscode-register: vscode-devfile
+vscode-register: check-namespace vscode-devfile
 	oc create configmap $(VSCODE_CONFIGMAP) \
 	  --from-file=$(VSCODE_DIR)/devfile-rendered.yaml \
 	  -n $(NAMESPACE)
@@ -132,5 +136,5 @@ vscode-test:
 vscode-teardown:
 	$(VSCODE_DIR)/teardown.sh
 
-vscode-unregister:
+vscode-unregister: check-namespace
 	oc delete configmap $(VSCODE_CONFIGMAP) -n $(NAMESPACE)

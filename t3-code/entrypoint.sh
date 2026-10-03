@@ -1,5 +1,7 @@
 #!/bin/bash
 
+umask 077
+
 if ! whoami &> /dev/null; then
   if [ -w /etc/passwd ]; then
     echo "default:x:$(id -u):0:default user:${HOME}:/sbin/nologin" >> /etc/passwd
@@ -20,13 +22,17 @@ if [ -f /t3code/discover-models.sh ]; then
 fi
 
 PERSIST="${PROJECTS_ROOT:-/projects}/.devspaces-t3code"
-mkdir -p "$PERSIST/gcloud" "$PERSIST/t3code-home"
+mkdir -p "$PERSIST/gcloud" "$PERSIST/t3code-home" || exit 1
+chmod 700 "$PERSIST" || exit 1
+if [ -f "$PERSIST/pairing-token.txt" ]; then
+  chmod 600 "$PERSIST/pairing-token.txt" || exit 1
+fi
 
 export CLOUDSDK_CONFIG="$PERSIST/gcloud"
 export T3CODE_HOME="$PERSIST/t3code-home"
 export NODE_OPTIONS="--unhandled-rejections=warn"
 
-cd ${PROJECTS_ROOT:-/projects}
+cd "${PROJECTS_ROOT:-/projects}" || exit 1
 
 while true; do
   t3 serve \
@@ -40,17 +46,26 @@ while true; do
 
   sleep 5
 
-  if [ ! -f "$PERSIST/pairing-token.txt" ]; then
+  if [ ! -s "$PERSIST/pairing-token.txt" ]; then
     TOKEN_JSON=$(t3 auth pairing create --ttl 30d --label "devspaces" --json 2>/dev/null)
     if [ -n "$TOKEN_JSON" ]; then
-      CREDENTIAL=$(echo "$TOKEN_JSON" | grep '"credential"' | sed 's/.*: "//;s/".*//')
-      echo "$CREDENTIAL" > "$PERSIST/pairing-token.txt"
-      echo "Pairing token created and saved to $PERSIST/pairing-token.txt"
+      CREDENTIAL=$(printf '%s' "$TOKEN_JSON" | node -e '
+        let input = "";
+        process.stdin.on("data", chunk => { input += chunk; });
+        process.stdin.on("end", () => {
+          try {
+            const { credential } = JSON.parse(input);
+            if (typeof credential !== "string" || !credential.trim()) process.exit(1);
+            process.stdout.write(credential);
+          } catch { process.exit(1); }
+        });
+      ')
+      if [ -n "$CREDENTIAL" ]; then
+        printf '%s\n' "$CREDENTIAL" > "$PERSIST/pairing-token.txt" || exit 1
+        chmod 600 "$PERSIST/pairing-token.txt" || exit 1
+        echo "Pairing token saved. Retrieve it with deploy.sh or oc exec."
+      fi
     fi
-  fi
-
-  if [ -f "$PERSIST/pairing-token.txt" ]; then
-    echo "Pairing token: $(cat "$PERSIST/pairing-token.txt")"
   fi
 
   wait $T3_PID

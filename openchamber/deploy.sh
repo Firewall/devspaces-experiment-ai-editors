@@ -9,7 +9,7 @@ if [ ! -f "$REPO_ROOT/config.env" ]; then
 fi
 source "$REPO_ROOT/config.env"
 
-NAMESPACE="${NAMESPACE:-rh-ee-mdemytte-dev}"
+NAMESPACE="${NAMESPACE:?Set NAMESPACE to your Dev Spaces user namespace in config.env}"
 OPENCHAMBER_IMAGE="${OPENCHAMBER_IMAGE:?Set OPENCHAMBER_IMAGE in config.env}"
 
 echo "=== Deploying OpenChamber to namespace: $NAMESPACE ==="
@@ -110,7 +110,7 @@ EOF
 
 # Step 4: Wait for pod
 echo "Waiting for workspace pod..."
-for i in $(seq 1 60); do
+for _ in $(seq 1 60); do
   POD=$(oc get pods -n "$NAMESPACE" -l controller.devfile.io/devworkspace_name=openchamber-workspace --no-headers 2>/dev/null | grep -v cleanup | grep -v Completed | awk '{print $1}')
   if [ -n "$POD" ]; then
     echo "Pod: $POD"
@@ -118,6 +118,11 @@ for i in $(seq 1 60); do
   fi
   sleep 3
 done
+
+if [ -z "$POD" ]; then
+  echo "No OpenChamber workspace pod appeared. Check DevWorkspace status with oc."
+  exit 1
+fi
 
 echo "Waiting for containers to start..."
 oc wait --for=condition=Ready "pod/$POD" -n "$NAMESPACE" --timeout=180s
@@ -155,10 +160,10 @@ EOF
 # Step 6: Get UI password
 echo "Waiting for OpenChamber to start..."
 sleep 15
-UI_PASSWORD=$(oc exec "$POD" -c openchamber-runtime -n "$NAMESPACE" -- cat /projects/.devspaces-openchamber/ui-password.txt 2>/dev/null)
+UI_PASSWORD=$(oc exec "$POD" -c openchamber-runtime -n "$NAMESPACE" -- cat /projects/.devspaces-openchamber/ui-password.txt 2>/dev/null || true)
 if [ -z "$UI_PASSWORD" ]; then
   sleep 10
-  UI_PASSWORD=$(oc exec "$POD" -c openchamber-runtime -n "$NAMESPACE" -- cat /projects/.devspaces-openchamber/ui-password.txt 2>/dev/null)
+  UI_PASSWORD=$(oc exec "$POD" -c openchamber-runtime -n "$NAMESPACE" -- cat /projects/.devspaces-openchamber/ui-password.txt 2>/dev/null || true)
 fi
 
 ROUTE_HOST=$(oc get route openchamber-direct -n "$NAMESPACE" -o jsonpath='{.spec.host}')

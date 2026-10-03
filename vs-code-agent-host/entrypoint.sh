@@ -1,5 +1,7 @@
 #!/bin/bash
 
+umask 077
+
 if ! whoami &> /dev/null; then
   if [ -w /etc/passwd ]; then
     echo "default:x:$(id -u):0:default user:${HOME}:/sbin/nologin" >> /etc/passwd
@@ -24,7 +26,8 @@ if [ -f /usr/local/bin/discover-models-vscode.sh ]; then
 fi
 
 PERSIST="${PROJECTS_ROOT:-/projects}/.devspaces-agent-host"
-mkdir -p "$PERSIST/gcloud" "$PERSIST/vscode-server"
+mkdir -p "$PERSIST/gcloud" "$PERSIST/vscode-server" || exit 1
+chmod 700 "$PERSIST" || exit 1
 
 TOKEN_FILE="$PERSIST/connection-token"
 if [ ! -s "$TOKEN_FILE" ]; then
@@ -33,13 +36,13 @@ if [ ! -s "$TOKEN_FILE" ]; then
     echo "Unable to create an Agent Host connection token" >&2
     exit 1
   fi
-  printf '%s\n' "$CONNECTION_TOKEN" > "$TOKEN_FILE"
+  printf '%s\n' "$CONNECTION_TOKEN" > "$TOKEN_FILE" || exit 1
 fi
-chmod 600 "$TOKEN_FILE"
+chmod 600 "$TOKEN_FILE" || exit 1
 
 export CLOUDSDK_CONFIG="$PERSIST/gcloud"
 
-cd ${PROJECTS_ROOT:-/projects}
+cd "${PROJECTS_ROOT:-/projects}" || exit 1
 
 echo "Starting VS Code Agent Host on port 3773..."
 code agent host \

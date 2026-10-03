@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 SA_CA=/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
 [ -f "$SA_CA" ] && export NODE_EXTRA_CA_CERTS="$SA_CA"
 

@@ -10,7 +10,8 @@ if [ ! -f "$REPO_ROOT/config.env" ]; then
 fi
 source "$REPO_ROOT/config.env"
 
-NAMESPACE="${NAMESPACE:-rh-ee-mdemytte-dev}"
+NAMESPACE="${NAMESPACE:?Set NAMESPACE to your Dev Spaces user namespace in config.env}"
+T3_IMAGE="${T3_IMAGE:?Set T3_IMAGE in config.env}"
 
 echo "=== Deploying T3 Code to namespace: $NAMESPACE ==="
 
@@ -104,7 +105,7 @@ EOF
 
 # Step 4: Wait for pod
 echo "Waiting for workspace pod..."
-for i in $(seq 1 60); do
+for _ in $(seq 1 60); do
   POD=$(oc get pods -n "$NAMESPACE" -l controller.devfile.io/devworkspace_name=t3-code-workspace --no-headers 2>/dev/null | grep -v cleanup | grep -v Completed | awk '{print $1}')
   if [ -n "$POD" ]; then
     echo "Pod: $POD"
@@ -112,6 +113,11 @@ for i in $(seq 1 60); do
   fi
   sleep 3
 done
+
+if [ -z "$POD" ]; then
+  echo "No T3 Code workspace pod appeared. Check DevWorkspace status with oc."
+  exit 1
+fi
 
 echo "Waiting for containers to start..."
 oc wait --for=condition=Ready "pod/$POD" -n "$NAMESPACE" --timeout=180s
@@ -149,10 +155,10 @@ EOF
 # Step 6: Get pairing token
 echo "Waiting for T3 Code to start..."
 sleep 15
-PAIRING_TOKEN=$(oc exec "$POD" -c t3-code-runtime -n "$NAMESPACE" -- cat /projects/.devspaces-t3code/pairing-token.txt 2>/dev/null)
+PAIRING_TOKEN=$(oc exec "$POD" -c t3-code-runtime -n "$NAMESPACE" -- cat /projects/.devspaces-t3code/pairing-token.txt 2>/dev/null || true)
 if [ -z "$PAIRING_TOKEN" ]; then
   sleep 10
-  PAIRING_TOKEN=$(oc exec "$POD" -c t3-code-runtime -n "$NAMESPACE" -- cat /projects/.devspaces-t3code/pairing-token.txt 2>/dev/null)
+  PAIRING_TOKEN=$(oc exec "$POD" -c t3-code-runtime -n "$NAMESPACE" -- cat /projects/.devspaces-t3code/pairing-token.txt 2>/dev/null || true)
 fi
 
 ROUTE_HOST=$(oc get route t3-code-direct -n "$NAMESPACE" -o jsonpath='{.spec.host}')
@@ -170,7 +176,8 @@ fi
 echo ""
 echo "Shell: oc exec -it $POD -c t3-code-runtime -n $NAMESPACE -- bash"
 echo ""
-echo "To authenticate gcloud (required for Claude):"
+echo "KServe models are discovered automatically when the workspace can access them."
+echo "For optional Vertex AI authentication:"
 echo "  oc exec -it $POD -c t3-code-runtime -n $NAMESPACE -- bash"
 echo "  export PATH=/t3code/npm-global/bin:/t3code/google-cloud-sdk/bin:\$PATH"
 echo "  gcloud auth application-default login --no-launch-browser"

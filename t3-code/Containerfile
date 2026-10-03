@@ -9,7 +9,9 @@ RUN ARCH=$(uname -m) && \
     curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
       | tar -xz -C /usr/lib
 
-RUN npm install -g t3@nightly opencode-ai
+ARG T3_VERSION=0.0.46-nightly.20261003.2610
+ARG OPENCODE_VERSION=1.18.34
+RUN npm install -g "t3@${T3_VERSION}" "opencode-ai@${OPENCODE_VERSION}"
 
 COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
 COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh

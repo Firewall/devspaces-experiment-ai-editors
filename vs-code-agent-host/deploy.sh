@@ -10,7 +10,7 @@ if [ ! -f "$REPO_ROOT/config.env" ]; then
 fi
 source "$REPO_ROOT/config.env"
 
-NAMESPACE="${NAMESPACE:-rh-ee-mdemytte-dev}"
+NAMESPACE="${NAMESPACE:?Set NAMESPACE to your Dev Spaces user namespace in config.env}"
 AGENT_HOST_IMAGE="${AGENT_HOST_IMAGE:?Set AGENT_HOST_IMAGE in config.env}"
 
 echo "=== Deploying VS Code Agent Host to namespace: $NAMESPACE ==="
@@ -75,7 +75,7 @@ EOF
 
 # Step 4: Wait for pod
 echo "Waiting for workspace pod..."
-for i in $(seq 1 60); do
+for _ in $(seq 1 60); do
   POD=$(oc get pods -n "$NAMESPACE" -l controller.devfile.io/devworkspace_name=vs-code-agent-host-workspace --no-headers 2>/dev/null | grep -v cleanup | grep -v Completed | awk '{print $1}')
   if [ -n "$POD" ]; then
     echo "Pod: $POD"
@@ -83,6 +83,11 @@ for i in $(seq 1 60); do
   fi
   sleep 3
 done
+
+if [ -z "$POD" ]; then
+  echo "No VS Code Agent Host workspace pod appeared. Check DevWorkspace status with oc."
+  exit 1
+fi
 
 echo "Waiting for containers to start..."
 oc wait --for=condition=Ready "pod/$POD" -n "$NAMESPACE" --timeout=300s

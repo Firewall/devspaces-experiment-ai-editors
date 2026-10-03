@@ -3,8 +3,12 @@
 # Run after deploy.sh completes.
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source "$REPO_ROOT/config.env" 2>/dev/null
-NAMESPACE="${NAMESPACE:-rh-ee-mdemytte-dev}"
+if [ ! -f "$REPO_ROOT/config.env" ]; then
+  echo "config.env not found. Set NAMESPACE in config.env before testing."
+  exit 1
+fi
+source "$REPO_ROOT/config.env"
+NAMESPACE="${NAMESPACE:?Set NAMESPACE to your Dev Spaces user namespace in config.env}"
 WS_NAME="vs-code-agent-host-workspace"
 CONTAINER="vs-code-agent-host"
 
@@ -38,7 +42,7 @@ exec_pod() {
   oc exec "$POD" -c "$CONTAINER" -n "$NAMESPACE" -- "$@"
 }
 
-echo "=== VS Code Agent Host — End-to-End Test ==="
+echo "=== VS Code Agent Host integration test ==="
 echo ""
 
 # --- Pod ---
@@ -47,7 +51,7 @@ POD=$(oc get pods -n "$NAMESPACE" -l "controller.devfile.io/devworkspace_name=$W
 if [ -z "$POD" ]; then
   echo "  [FAIL] No pod found for workspace $WS_NAME"
   echo ""
-  echo "Run make vscode-deploy first."
+  echo "Run ./vs-code-agent-host/deploy.sh first."
   exit 1
 fi
 echo "  [PASS] Pod: $POD"

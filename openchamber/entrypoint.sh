@@ -1,5 +1,7 @@
 #!/bin/bash
 
+umask 077
+
 # OpenShift arbitrary UID — containers run as a random UID in GID 0
 if ! whoami &> /dev/null; then
   if [ -w /etc/passwd ]; then
@@ -24,7 +26,8 @@ mkdir -p "$PERSIST/gcloud" \
          "$PERSIST/opencode-config" \
          "$PERSIST/opencode-share" \
          "$PERSIST/opencode-state" \
-         "$PERSIST/openchamber-config"
+         "$PERSIST/openchamber-config" || exit 1
+chmod 700 "$PERSIST" || exit 1
 
 # Symlink XDG dirs so OpenCode and OpenChamber state survives workspace restarts
 mkdir -p "$HOME/.config" "$HOME/.local/share" "$HOME/.local/state"
@@ -45,22 +48,27 @@ fi
 
 # Generate a stable UI password on first start, persist it
 if [ -z "$OPENCHAMBER_UI_PASSWORD" ]; then
-  if [ -f "$PERSIST/ui-password.txt" ]; then
+  if [ -s "$PERSIST/ui-password.txt" ]; then
     OPENCHAMBER_UI_PASSWORD=$(cat "$PERSIST/ui-password.txt")
   else
     OPENCHAMBER_UI_PASSWORD=$(head -c 32 /dev/urandom | base64 | tr -d '=/+' | head -c 16)
-    echo "$OPENCHAMBER_UI_PASSWORD" > "$PERSIST/ui-password.txt"
   fi
-  export OPENCHAMBER_UI_PASSWORD
 fi
+if [ -z "$OPENCHAMBER_UI_PASSWORD" ]; then
+  echo "Unable to create an OpenChamber UI password" >&2
+  exit 1
+fi
+printf '%s\n' "$OPENCHAMBER_UI_PASSWORD" > "$PERSIST/ui-password.txt" || exit 1
+chmod 600 "$PERSIST/ui-password.txt" || exit 1
+export OPENCHAMBER_UI_PASSWORD
 
 echo ""
 echo "=== OpenChamber ==="
-echo "UI password: $OPENCHAMBER_UI_PASSWORD"
+echo "UI password saved. Retrieve it with deploy.sh or oc exec."
 echo ""
 
 WORKDIR="${PROJECTS_ROOT:-/projects}"
-cd "$WORKDIR"
+cd "$WORKDIR" || exit 1
 
 # Pre-seed OpenCode config so it defaults to /projects/ as the workspace root
 OPENCODE_CFG="$HOME/.config/opencode/config.json"

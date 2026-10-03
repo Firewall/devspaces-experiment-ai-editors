@@ -1,227 +1,178 @@
-# AI Editors — Dev Spaces
+# AI editors for OpenShift Dev Spaces
 
-Packages AI-native code editors as native OpenShift Dev Spaces editors alongside Che Code.
+Run T3 Code, OpenChamber, Orca, or VS Code Agent Host in OpenShift Dev Spaces workspaces. This repository contains container recipes, devfiles, and scripts that build an image and create a workspace in your user namespace.
 
-| Editor | AI Backend | Port | Auth | Access |
-|--------|-----------|------|------|--------|
-| [T3 Code](https://github.com/pingdotgg/t3code) | Red Hat AI (in-cluster KServe) via [OpenCode](https://opencode.ai) | 3773 | Pairing token | OpenShift Route (browser) |
-| [OpenChamber](https://github.com/openchamber/openchamber) | 75+ providers via [OpenCode](https://opencode.ai) | 3000 | UI password | OpenShift Route (browser) |
-| [Orca](https://github.com/stablyai/orca) | Coding agent CLIs, including [OpenCode](https://opencode.ai) | 6768 | Browser pairing URL | OpenShift Route |
+This is an experiment. Direct OpenShift Routes work around Che gateway routing limitations, and upstream editor changes can break the integrations. It is a community project with no production support commitment.
 
-## Prerequisites
+| Integration | AI setup | Port | Authentication | Client |
+| --- | --- | --- | --- | --- |
+| [T3 Code](https://github.com/pingdotgg/t3code) | OpenCode with optional KServe model discovery | 3773 | Pairing token | Browser |
+| [OpenChamber](https://github.com/openchamber/openchamber) | OpenCode providers, including KServe | 3000 | UI password | Browser |
+| [Orca](https://github.com/stablyai/orca) | Coding agent CLIs, with OpenCode installed | 6768 | Browser pairing URL | Browser |
+| [VS Code Agent Host](https://code.visualstudio.com/) | Discovered KServe models and OpenCode | 3773 | Connection token | Compatible VS Code client |
 
-- `podman` (or `docker`)
-- `oc` CLI authenticated to the Dev Spaces cluster
-- A container registry you can push to (the image must be **public** — Dev Spaces needs to pull it and you likely can't create image pull secrets on shared clusters)
-- Google Vertex AI project with Claude enabled (optional for OpenChamber)
+VS Code Agent Host exposes an agent service. Its URL is a service endpoint for a compatible client, rather than a browser IDE.
 
-## Configuration
+## Requirements
 
-Copy the example config and fill in your values:
+- An OpenShift cluster with Dev Spaces installed.
+- Bash and `podman` on your machine. The deploy scripts use Podman.
+- The `oc` CLI, logged in to the cluster.
+- Permission to create DevWorkspaces, DevWorkspaceTemplates, Services, and Routes in your Dev Spaces user namespace.
+- A registry you can push to and that workspace pods can pull from. A public image is convenient on shared clusters where you cannot configure pull credentials. Check [upstream terms](THIRD_PARTY.md) before publishing images, particularly the VS Code integration.
+
+Cluster-wide editor registration additionally needs admin permissions and `envsubst`. Google Vertex AI is optional and requires a Google Cloud project with access to your chosen models.
+
+## Configure
 
 ```bash
 cp config.env.example config.env
-vi config.env
+${EDITOR:-vi} config.env
 ```
+
+Set `NAMESPACE` to your Dev Spaces user namespace and replace `my-org` in the image names for the editors you want to deploy:
 
 ```env
-# --- T3 Code ---
+NAMESPACE=rh-ee-yourname-dev
 T3_IMAGE=quay.io/my-org/devspaces-t3-code-editor:latest
-
-# --- OpenChamber ---
 OPENCHAMBER_IMAGE=quay.io/my-org/devspaces-openchamber-editor:latest
-# OPENCHAMBER_UI_PASSWORD=my-password  # auto-generated if omitted
-
-# --- Orca ---
 ORCA_IMAGE=quay.io/my-org/devspaces-orca-editor:latest
-
-# --- Shared ---
-NAMESPACE=openshift-devspaces
-GOOGLE_CLOUD_PROJECT=my-project
-CLOUD_ML_REGION=us-central1
+AGENT_HOST_IMAGE=quay.io/my-org/devspaces-vs-code-agent-host:latest
 ```
 
-`config.env` is gitignored — your settings stay local. Set `NAMESPACE` to your Dev Spaces user namespace (e.g. `rh-ee-yourname-dev`).
+Run `oc project -q` to check your current namespace. The scripts require an explicit `NAMESPACE`; the namespace hosting the Dev Spaces operator is usually different from your user namespace.
 
-## Quick Start — T3 Code (no admin required)
+`config.env` is a local, gitignored Bash file. Leave `GOOGLE_CLOUD_PROJECT` empty unless you use Vertex AI. OpenChamber generates a UI password if `OPENCHAMBER_UI_PASSWORD` is unset.
+
+## Deploy
+
+Run the script for your chosen editor from the repository root:
 
 ```bash
-cp config.env.example config.env
-vi config.env
 ./t3-code/deploy.sh
-```
-
-Prints the T3 Code URL and pairing token when done. Tear down: `./t3-code/teardown.sh`
-
-## Quick Start — OpenChamber (no admin required)
-
-```bash
-cp config.env.example config.env
-vi config.env
+# or
 ./openchamber/deploy.sh
-```
-
-Prints the OpenChamber URL and UI password when done. Tear down: `./openchamber/teardown.sh`
-
-OpenChamber supports 75+ LLM providers (Anthropic, OpenAI, Google, local models, etc.) via [OpenCode](https://opencode.ai). Configure your provider by shelling into the workspace and editing `~/.config/opencode/config.json`. For Vertex AI, also run `gcloud auth application-default login`.
-
-## Quick start for Orca
-
-```bash
-cp config.env.example config.env
-vi config.env
+# or
 ./orca/deploy.sh
+# or
+./vs-code-agent-host/deploy.sh
 ```
 
-Set `ORCA_IMAGE` to your public registry image. The script prints a browser pairing URL. Open that full URL to connect to Orca, then add a repository under `/projects` and start an OpenCode terminal. Tear down with `./orca/teardown.sh`.
+Each script builds and pushes a `linux/amd64` image, creates an editor template and workspace, waits for the pod, and creates a direct HTTPS Route. It then prints the connection URL and credential. Keep that output private.
 
-The image builds Orca v1.4.219's standalone runtime and web client, then injects them into the universal developer image. Both image stages use Red Hat UBI 9, with Node.js 24 for the build and Node.js 22 for the injector. The builder runs on the host architecture and packages the runtime for linux/amd64, so ARM Macs can build it without running esbuild under emulation. OpenCode and gcloud use the same shared setup as the other editors. Orca's standalone runtime in this release needs a small [patch](orca/web-client.patch) to serve its web client and initialize terminal creation. The workspace uses Bash as its default shell.
+Orca creates its Route before starting the workspace so its pairing URL advertises the external WebSocket address. The other integrations create the Route after the pod starts.
 
-## What the deploy scripts do
+The workspace initially has no source repository. Add or clone your code under `/projects` after connecting. Each integration uses fixed workspace and resource names, so rerunning its script updates the same resources in the configured namespace.
 
-`t3-code/deploy.sh`, `openchamber/deploy.sh`, and `orca/deploy.sh` handle the full deployment:
-
-1. Build the container image for `linux/amd64` and push to your registry
-2. Create a `DevWorkspaceTemplate` (the editor definition) in your namespace
-3. Create a `DevWorkspace` that references the editor template
-4. Wait for the workspace pod to be ready
-5. Create a direct OpenShift Route (bypasses the Che gateway — see "Known Issues")
-6. Print the URL and credentials, a pairing token for T3 Code, UI password for OpenChamber, or browser pairing URL for Orca
-
-Orca creates its direct Route before starting the workspace so the pairing URL advertises the external `wss://` endpoint.
-
-## Authentication
-
-### T3 Code — Pairing Token
-
-T3 Code requires a one-time pairing token on first connect. The deploy script prints it automatically. To retrieve it later:
+For VS Code Agent Host, check a running deployment with:
 
 ```bash
-POD=$(oc get pods -n <your-namespace> -l controller.devfile.io/devworkspace_name=t3-code-workspace --no-headers | grep -v cleanup | awk '{print $1}')
-oc exec $POD -c t3-code-runtime -n <your-namespace> -- cat /projects/.devspaces-t3code/pairing-token.txt
+./vs-code-agent-host/test.sh
 ```
 
-### OpenChamber — UI Password
+The test checks the pod, CLI, model files, token, bubblewrap, service, and Route. Bubblewrap depends on the cluster allowing user namespaces; a failed check means you should not assume sandboxing works.
 
-OpenChamber uses a UI password. If not set in `config.env`, one is auto-generated on first start. To retrieve it:
+## Credentials and access
+
+Direct Routes bypass the Che gateway. Access depends on the editor's own password, pairing, or connection token. The Routes terminate TLS and redirect HTTP to HTTPS.
+
+Credentials persist under `/projects/.devspaces-*`. Entrypoints restrict the state directory to the workspace user and credential files to mode `600`. Our startup scripts do not print T3 pairing tokens or OpenChamber passwords into runtime logs. The deploy scripts deliberately print credentials so you can connect.
+
+To retrieve a credential later, find the workspace pod and read the file for your integration:
+
+| Integration | Workspace | Container | Credential file |
+| --- | --- | --- | --- |
+| T3 Code | `t3-code-workspace` | `t3-code-runtime` | `/projects/.devspaces-t3code/pairing-token.txt` |
+| OpenChamber | `openchamber-workspace` | `openchamber-runtime` | `/projects/.devspaces-openchamber/ui-password.txt` |
+| Orca | `orca-workspace` | `orca-runtime` | `/projects/.devspaces-orca/ready.jsonl` |
+| VS Code Agent Host | `vs-code-agent-host-workspace` | `vs-code-agent-host` | `/projects/.devspaces-agent-host/connection-token` |
+
+For example, to retrieve the T3 Code token:
 
 ```bash
-POD=$(oc get pods -n <your-namespace> -l controller.devfile.io/devworkspace_name=openchamber-workspace --no-headers | grep -v cleanup | awk '{print $1}')
-oc exec $POD -c openchamber-runtime -n <your-namespace> -- cat /projects/.devspaces-openchamber/ui-password.txt
+source ./config.env
+POD=$(oc get pods -n "$NAMESPACE" \
+  -l controller.devfile.io/devworkspace_name=t3-code-workspace \
+  --no-headers | awk '$3 != "Completed" && $1 !~ /cleanup/ {print $1; exit}')
+oc exec "$POD" -c t3-code-runtime -n "$NAMESPACE" -- \
+  cat /projects/.devspaces-t3code/pairing-token.txt
 ```
 
-### Orca browser pairing
+For Orca, use the full `pairing.webClientUrl` in its readiness JSON, including the fragment. Treat that URL as a credential. T3 Code creates a pairing token with a 30-day lifetime; an expired, unused token needs to be recreated.
 
-The URL printed by `./orca/deploy.sh` includes the pairing credential in its fragment. Keep the full URL when opening it in a browser. Orca saves paired devices and worktree state under `/projects/.devspaces-orca/orca-home`.
+Keep passwords, pairing URLs, logs, and generated model configuration out of issues and pull requests. VS Code's `chatLanguageModels.json` contains a service account token and is written with mode `600`.
 
-Treat the full pairing URL as a credential. The startup file is readable only by the workspace user. The direct Route serves Orca over HTTPS, and runtime access requires pairing.
+## AI providers
 
-To retrieve the current startup pairing URL, read `pairing.webClientUrl` from the readiness JSON:
+### KServe model discovery
 
-```bash
-POD=$(oc get pods -n <your-namespace> -l controller.devfile.io/devworkspace_name=orca-workspace --no-headers | grep -v cleanup | awk 'NR == 1 {print $1}')
-oc exec "$POD" -c orca-runtime -n <your-namespace> -- cat /projects/.devspaces-orca/ready.jsonl
-```
+The integrations look for KServe InferenceServices in `sandbox-shared-models`. The workspace service account needs permission to list them and authenticate to their model endpoints. Discovery generates `/projects/opencode.json`; VS Code Agent Host also generates `/projects/chatLanguageModels.json`.
 
-## LLM Provider Setup
+To use another model namespace, add a `REDHAT_AI_NAMESPACE` environment variable to the runtime component in the relevant `deploy.sh` and `devfile.yaml`. The namespace default targets a shared sandbox setup and may not exist on your cluster.
 
-### T3 Code (Red Hat AI — automatic)
+Discovery skips missing or unreachable services. If your cluster has no shared models, configure an OpenCode provider yourself. The generated OpenCode configuration disables OpenCode's own tools for use as an editor backend; adjust that configuration if you want to use OpenCode directly as a coding agent.
 
-T3 Code auto-discovers KServe InferenceServices in the cluster at startup and generates an `opencode.json` with all available models. No manual configuration needed — start a terminal in the workspace and run `opencode`, then pick a model with `/models`.
+### Other providers
 
-The discovery script (`discover-models.sh`) uses `oc` to list InferenceServices in the `sandbox-shared-models` namespace (override with `REDHAT_AI_NAMESPACE`). Set `REDHAT_AI_NAMESPACE` in the devfile env vars to point at a different namespace.
+OpenCode supports external providers. Open a workspace terminal or use `oc exec -it` with the container listed above, then configure your provider using [OpenCode's provider documentation](https://opencode.ai/docs/providers/).
 
-### OpenChamber (any provider)
-
-OpenChamber supports 75+ LLM providers via OpenCode. Shell in and configure:
+For Google Vertex AI, set the project and region required by your provider configuration, then authenticate from the workspace:
 
 ```bash
-POD=$(oc get pods -n <your-namespace> -l controller.devfile.io/devworkspace_name=openchamber-workspace --no-headers | grep -v cleanup | awk '{print $1}')
-oc exec -it $POD -c openchamber-runtime -n <your-namespace> -- bash
-# Edit OpenCode config with your API key
-vi ~/.config/opencode/config.json
-# For Vertex AI, also run:
-export PATH=/openchamber/npm-global/bin:/openchamber/google-cloud-sdk/bin:$PATH
 gcloud auth application-default login --no-launch-browser
 ```
 
-T3 Code, OpenChamber, and Orca auto-discover Red Hat AI models served via KServe on the cluster.
+OpenChamber and Orca persist OpenCode and Google Cloud state on `/projects`. T3 Code persists its editor state and Google Cloud state. VS Code Agent Host persists its server state and Google Cloud state. Other coding agent CLIs can be installed and authenticated in the workspace terminal.
 
-### Orca coding agents
+## Remove a deployment
 
-OpenCode is installed in Orca's workspace and uses the provider configuration described above. Its configuration, credentials, and session state persist under `/projects/.devspaces-orca`. Other coding agent CLIs can be installed and authenticated from a workspace terminal.
-
-All credentials are persisted to the `/projects` volume — you only need to do this once per workspace lifetime.
-
-## Cluster-wide Registration (requires admin)
-
-Register editors in the dashboard editor picker for all users:
+Use the matching teardown script:
 
 ```bash
-# T3 Code
+./t3-code/teardown.sh
+# or
+./openchamber/teardown.sh
+# or
+./orca/teardown.sh
+# or
+./vs-code-agent-host/teardown.sh
+```
+
+Teardown removes the integration's workspace, editor template, direct Service, and Route in `NAMESPACE`. Storage retention follows your cluster's DevWorkspace policy. Back up anything you need from `/projects` first.
+
+## Cluster-wide registration
+
+The deploy scripts create templates in your namespace. To add editor definitions to the dashboard picker for everyone, set `NAMESPACE` to the Dev Spaces installation namespace and use the admin registration targets:
+
+```bash
 make t3-register
-
-# OpenChamber
 make chamber-register
-
-# Orca
 make orca-register
+make vscode-register
 ```
 
-To remove: `make t3-unregister`, `make chamber-unregister`, or `make orca-unregister`.
+Remove definitions with the matching `*-unregister` target. For manual Orca registration, also set `ORCA_PAIRING_ADDRESS` to a reachable `wss://` endpoint. Its deploy script calculates that address automatically. Restore your user namespace in `config.env` before deploying or tearing down a workspace.
 
-For manual Orca registration, set `ORCA_PAIRING_ADDRESS` to the reachable WebSocket URL in `config.env`. `./orca/deploy.sh` sets this from the direct Route automatically.
+## Versions and limitations
 
-## Known Issues
+The Containerfiles pin T3 Code, OpenChamber, OpenCode, and Orca to explicit versions. T3 Code currently uses a dated nightly release. Update the version declarations when testing a newer release. Base images, Google Cloud SDK downloads, the OpenShift CLI, and the VS Code stable CLI still follow moving releases, so builds are not fully reproducible.
 
-### T3 Code and OpenChamber
+Images target `linux/amd64`. On ARM machines, most stages need emulation. Orca builds on the host architecture and packages an amd64 runtime to avoid esbuild failures under emulation. Orca v1.4.219 needs [web-client.patch](orca/web-client.patch) to serve its web client and initialize terminal creation.
 
-- **Subpath routing** — The Che gateway serves editors under a subpath (e.g. `/username/workspace/port/`). Both editors' assets use absolute paths which break under subpath routing. The deploy scripts work around this by creating a direct Route with its own hostname.
-- **Dashboard "Open" button** — May show "workspace has not received an IDE URL". Use the direct Route URL printed by the deploy script instead.
-- **ECONNRESET crashes** — The Che gateway probes editor ports, causing unhandled `ECONNRESET` errors that crash Node.js. Both entrypoints include a restart loop that recovers in 2 seconds.
-- **Architecture** — Images must be built for `linux/amd64`. Building on ARM requires `--platform linux/amd64` (emulated, slower).
-- **gcloud CLI** — Installed via tarball (no `install.sh`) because UBI9 ships Python 3.9 and the latest gcloud installer requires 3.10+.
+T3 Code and OpenChamber assets use absolute paths that break under Che gateway subpaths. The direct Routes work around this, but the dashboard Open button may still lack an IDE URL. Use the URL printed by the deploy script. See [T3 Code's routing issue](https://github.com/pingdotgg/t3code/issues/2310).
 
-### T3 Code
+Che gateway probes can trigger Node.js `ECONNRESET` exits. The T3 Code and OpenChamber entrypoints restart the server after two seconds. This recovers the process but does not fix the upstream error.
 
-- **Upstream issue** — Subpath routing: [#2310](https://github.com/pingdotgg/t3code/issues/2310).
-- **Version** — T3 Code is at v0.0.x. Expect breaking changes.
+OpenChamber includes a Red Hat Dark theme. Load it through Settings, Theme, Reload themes, then select Red Hat Dark.
 
-### OpenChamber
+## Repository layout
 
-- **Theme** — A pre-seeded Red Hat Dark theme is available. Activate via Settings → Theme → Reload themes → "Red Hat Dark".
-- **LLM provider** — OpenCode must be configured with an API key after first start. Shell in and edit `~/.config/opencode/config.json`, or use `gcloud auth` for Vertex AI.
+Each editor directory contains its `Containerfile`, `devfile.yaml`, `deploy.sh`, `teardown.sh`, and startup scripts. T3 Code, OpenChamber, and Orca inject their runtime into a universal developer image. VS Code Agent Host runs its own image directly.
 
-## Files
+`shared/` contains shell setup and KServe discovery. `config.env.example` documents local configuration. The `Makefile` provides build, push, and admin registration targets.
 
-### Repository layout
+For local changes, check Bash syntax and run ShellCheck before testing a deployment. Keep credentials and rendered devfiles out of commits.
 
-```
-├── config.env.example          # Template for local config.env
-├── Makefile                    # Build, push, and cluster-wide registration
-├── shared/
-│   ├── bashrc.sh               # Shell prompt and CA cert trust
-│   └── discover-models.sh      # KServe model discovery → opencode.json
-├── t3-code/
-│   ├── Containerfile           # UBI9 + Node.js 22 + T3 Code + OpenCode + gcloud
-│   ├── deploy.sh               # One-command deploy
-│   ├── teardown.sh             # Remove all workspace resources
-│   ├── entrypoint.sh           # Runtime startup with auto-restart
-│   ├── entrypoint-init-container.sh
-│   └── devfile.yaml            # Che editor definition template
-├── orca/
-│   ├── Containerfile           # UBI9 build and injector stages for Orca
-│   ├── deploy.sh               # Deploy and print the browser pairing URL
-│   ├── teardown.sh             # Remove all workspace resources
-│   ├── entrypoint.sh           # Persistent state and runtime startup
-│   ├── entrypoint-init-container.sh
-│   ├── web-client.patch        # Enable web serving and terminal initialization
-│   └── devfile.yaml            # Che editor definition template
-└── openchamber/
-    ├── Containerfile           # UBI9 + OpenChamber + OpenCode + gcloud
-    ├── deploy.sh               # One-command deploy
-    ├── teardown.sh             # Remove all workspace resources
-    ├── entrypoint.sh           # Runtime startup with auto-restart
-    ├── entrypoint-init-container.sh
-    └── devfile.yaml            # Che editor definition template
-```
+## License
+
+The integration code is licensed under [MIT](LICENSE). See [THIRD_PARTY.md](THIRD_PARTY.md) for upstream licenses and the terms on downloaded binaries.
