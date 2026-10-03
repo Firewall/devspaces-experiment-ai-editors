@@ -57,51 +57,43 @@ EOF
 
 wait_for_workspace() {
   local workspace="$1" timeout="${2:-180s}"
-  local timeout_seconds="${timeout%s}" deadline remaining pods selection pod ready last_pod=""
+  local timeout_seconds="${timeout%s}" deadline remaining deployment pods
+  local selector="controller.devfile.io/devworkspace_name=$workspace"
   if [[ ! "$timeout_seconds" =~ ^[0-9]+$ ]] || [ "$timeout_seconds" -eq 0 ]; then
     echo "Workspace timeout must be a positive number of seconds: $timeout" >&2
     return 1
   fi
   deadline=$((SECONDS + 10#$timeout_seconds))
   POD=""
-  echo "Waiting for workspace pod..."
-  while [ "$SECONDS" -lt "$deadline" ]; do
-    remaining=$((deadline - SECONDS))
-    if [ "$remaining" -le 0 ]; then break; fi
-    pods=$(oc get pods -n "$NAMESPACE" -l "controller.devfile.io/devworkspace_name=$workspace" \
-      -o json --request-timeout="${remaining}s") || return 1
-    # Re-select on every poll: applying a template can replace the previous pod.
-    selection=$(printf '%s\n' "$pods" | python3 -c '
-import json, sys
-pods = [pod for pod in json.load(sys.stdin)["items"]
-        if not pod["metadata"].get("deletionTimestamp")
-        and "cleanup" not in pod["metadata"]["name"]
-        and pod.get("status", {}).get("phase") not in ("Succeeded", "Failed")]
-if pods:
-    pod = max(pods, key=lambda pod: pod["metadata"].get("creationTimestamp", ""))
-    ready = any(condition.get("type") == "Ready" and condition.get("status") == "True"
-                for condition in pod.get("status", {}).get("conditions", []))
-    print(pod["metadata"]["name"], "ready" if ready else "pending")
-') || return 1
-    read -r pod ready <<< "$selection"
-    if [ -n "$pod" ] && [ "$pod" != "$last_pod" ]; then
-      echo "Pod: $pod"
-      echo "Waiting for containers to start..."
-      last_pod="$pod"
-    fi
-    if [ "$ready" = ready ]; then
-      POD="$pod"
-      echo "Pod ready: $POD"
-      return 0
-    fi
-    remaining=$((deadline - SECONDS))
-    if [ "$remaining" -gt 0 ]; then
-      if [ "$remaining" -gt 3 ]; then remaining=3; fi
-      sleep "$remaining"
-    fi
-  done
-  echo "Workspace $workspace was not ready within $timeout. Check: oc get devworkspace $workspace -n $NAMESPACE" >&2
-  return 1
+  echo "Waiting for workspace deployment..."
+  deployment=$(oc wait --for=create deployment -n "$NAMESPACE" -l "$selector" \
+    --timeout="$timeout" --request-timeout="$timeout" -o name) || return 1
+
+  remaining=$((deadline - SECONDS))
+  if [ "$remaining" -le 0 ]; then
+    echo "Workspace $workspace was not ready within $timeout." >&2
+    return 1
+  fi
+  echo "Waiting for workspace rollout..."
+  oc rollout status "$deployment" -n "$NAMESPACE" \
+    --timeout="${remaining}s" --request-timeout="${remaining}s" || return 1
+
+  remaining=$((deadline - SECONDS))
+  if [ "$remaining" -le 0 ]; then
+    echo "Workspace $workspace was not ready within $timeout." >&2
+    return 1
+  fi
+  # Resolve the pod after the rollout, when replacements have finished.
+  # Rows are name, Ready condition, and deletion time, sorted oldest first.
+  pods=$(oc get pods -n "$NAMESPACE" -l "$selector" --field-selector=status.phase=Running \
+    --sort-by=.metadata.creationTimestamp --request-timeout="${remaining}s" \
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.conditions[?(@.type=="Ready")].status}{"\t"}{.metadata.deletionTimestamp}{"\n"}{end}') || return 1
+  POD=$(printf '%s\n' "$pods" | awk -F '\t' '$1 !~ /cleanup/ && $2 == "True" && $3 == "" {pod=$1} END {print pod}')
+  if [ -z "$POD" ]; then
+    echo "No active ready pod found for workspace $workspace after rollout." >&2
+    return 1
+  fi
+  echo "Pod ready: $POD"
 }
 
 create_direct_route() {
