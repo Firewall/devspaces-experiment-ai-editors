@@ -11,6 +11,11 @@ CHAMBER_DIR = openchamber
 CHAMBER_CONFIGMAP ?= openchamber-editor-definition
 CHAMBER_DEVFILE = $(CHAMBER_DIR)/devfile.yaml
 
+# ---- Orca ----
+ORCA_DIR = orca
+ORCA_CONFIGMAP ?= orca-editor-definition
+ORCA_DEVFILE = $(ORCA_DIR)/devfile.yaml
+
 # ---- VS Code Agent Host ----
 VSCODE_DIR = vs-code-agent-host
 VSCODE_CONFIGMAP ?= vs-code-agent-host-editor-definition
@@ -18,6 +23,8 @@ VSCODE_DEVFILE = $(VSCODE_DIR)/devfile.yaml
 
 .PHONY: t3-build t3-push t3-register t3-unregister t3-devfile \
         chamber-build chamber-push chamber-register chamber-unregister chamber-devfile \
+        orca-build orca-push orca-register orca-unregister orca-devfile \
+        orca-deploy orca-teardown \
         vscode-build vscode-push vscode-deploy vscode-test vscode-teardown \
         vscode-register vscode-unregister vscode-devfile
 
@@ -66,6 +73,35 @@ chamber-register: chamber-devfile
 
 chamber-unregister:
 	oc delete configmap $(CHAMBER_CONFIGMAP) -n $(NAMESPACE)
+
+# === Orca targets ===
+orca-build:
+	podman build --platform linux/amd64 -f $(ORCA_DIR)/Containerfile -t $(ORCA_IMAGE) .
+
+orca-push:
+	podman push $(ORCA_IMAGE)
+
+orca-devfile:
+	envsubst '$$ORCA_IMAGE $$GOOGLE_CLOUD_PROJECT $$CLOUD_ML_REGION $$ORCA_PAIRING_ADDRESS' < $(ORCA_DEVFILE) > $(ORCA_DIR)/devfile-rendered.yaml
+
+orca-register: orca-devfile
+	oc create configmap $(ORCA_CONFIGMAP) \
+	  --from-file=$(ORCA_DIR)/devfile-rendered.yaml \
+	  -n $(NAMESPACE)
+	oc label configmap $(ORCA_CONFIGMAP) \
+	  app.kubernetes.io/part-of=che.eclipse.org \
+	  app.kubernetes.io/component=editor-definition \
+	  -n $(NAMESPACE)
+	@rm -f $(ORCA_DIR)/devfile-rendered.yaml
+
+orca-deploy:
+	$(ORCA_DIR)/deploy.sh
+
+orca-teardown:
+	$(ORCA_DIR)/teardown.sh
+
+orca-unregister:
+	oc delete configmap $(ORCA_CONFIGMAP) -n $(NAMESPACE)
 
 # === VS Code Agent Host targets ===
 vscode-build:

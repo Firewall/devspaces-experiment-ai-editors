@@ -6,6 +6,7 @@ Packages AI-native code editors as native OpenShift Dev Spaces editors alongside
 |--------|-----------|------|------|--------|
 | [T3 Code](https://github.com/pingdotgg/t3code) | Red Hat AI (in-cluster KServe) via [OpenCode](https://opencode.ai) | 3773 | Pairing token | OpenShift Route (browser) |
 | [OpenChamber](https://github.com/openchamber/openchamber) | 75+ providers via [OpenCode](https://opencode.ai) | 3000 | UI password | OpenShift Route (browser) |
+| [Orca](https://github.com/stablyai/orca) | Coding agent CLIs, including [OpenCode](https://opencode.ai) | 6768 | Browser pairing URL | OpenShift Route |
 
 ## Prerequisites
 
@@ -30,6 +31,9 @@ T3_IMAGE=quay.io/my-org/devspaces-t3-code-editor:latest
 # --- OpenChamber ---
 OPENCHAMBER_IMAGE=quay.io/my-org/devspaces-openchamber-editor:latest
 # OPENCHAMBER_UI_PASSWORD=my-password  # auto-generated if omitted
+
+# --- Orca ---
+ORCA_IMAGE=quay.io/my-org/devspaces-orca-editor:latest
 
 # --- Shared ---
 NAMESPACE=openshift-devspaces
@@ -61,16 +65,30 @@ Prints the OpenChamber URL and UI password when done. Tear down: `./openchamber/
 
 OpenChamber supports 75+ LLM providers (Anthropic, OpenAI, Google, local models, etc.) via [OpenCode](https://opencode.ai). Configure your provider by shelling into the workspace and editing `~/.config/opencode/config.json`. For Vertex AI, also run `gcloud auth application-default login`.
 
+## Quick start for Orca
+
+```bash
+cp config.env.example config.env
+vi config.env
+./orca/deploy.sh
+```
+
+Set `ORCA_IMAGE` to your public registry image. The script prints a browser pairing URL. Open that full URL to connect to Orca, then add a repository under `/projects` and start an OpenCode terminal. Tear down with `./orca/teardown.sh`.
+
+The image builds Orca v1.4.219's standalone runtime and web client, then injects them into the universal developer image. Both image stages use Red Hat UBI 9, with Node.js 24 for the build and Node.js 22 for the injector. The builder runs on the host architecture and packages the runtime for linux/amd64, so ARM Macs can build it without running esbuild under emulation. OpenCode and gcloud use the same shared setup as the other editors. Orca's standalone runtime in this release needs a small [patch](orca/web-client.patch) to serve its web client and initialize terminal creation. The workspace uses Bash as its default shell.
+
 ## What the deploy scripts do
 
-`t3-code/deploy.sh` and `openchamber/deploy.sh` follow the same steps:
+`t3-code/deploy.sh`, `openchamber/deploy.sh`, and `orca/deploy.sh` handle the full deployment:
 
 1. Build the container image for `linux/amd64` and push to your registry
 2. Create a `DevWorkspaceTemplate` (the editor definition) in your namespace
 3. Create a `DevWorkspace` that references the editor template
 4. Wait for the workspace pod to be ready
 5. Create a direct OpenShift Route (bypasses the Che gateway — see "Known Issues")
-6. Print the URL and credentials (pairing token for T3 Code, UI password for OpenChamber)
+6. Print the URL and credentials, a pairing token for T3 Code, UI password for OpenChamber, or browser pairing URL for Orca
+
+Orca creates its direct Route before starting the workspace so the pairing URL advertises the external `wss://` endpoint.
 
 ## Authentication
 
@@ -90,6 +108,19 @@ OpenChamber uses a UI password. If not set in `config.env`, one is auto-generate
 ```bash
 POD=$(oc get pods -n <your-namespace> -l controller.devfile.io/devworkspace_name=openchamber-workspace --no-headers | grep -v cleanup | awk '{print $1}')
 oc exec $POD -c openchamber-runtime -n <your-namespace> -- cat /projects/.devspaces-openchamber/ui-password.txt
+```
+
+### Orca browser pairing
+
+The URL printed by `./orca/deploy.sh` includes the pairing credential in its fragment. Keep the full URL when opening it in a browser. Orca saves paired devices and worktree state under `/projects/.devspaces-orca/orca-home`.
+
+Treat the full pairing URL as a credential. The startup file is readable only by the workspace user. The direct Route serves Orca over HTTPS, and runtime access requires pairing.
+
+To retrieve the current startup pairing URL, read `pairing.webClientUrl` from the readiness JSON:
+
+```bash
+POD=$(oc get pods -n <your-namespace> -l controller.devfile.io/devworkspace_name=orca-workspace --no-headers | grep -v cleanup | awk 'NR == 1 {print $1}')
+oc exec "$POD" -c orca-runtime -n <your-namespace> -- cat /projects/.devspaces-orca/ready.jsonl
 ```
 
 ## LLM Provider Setup
@@ -114,7 +145,11 @@ export PATH=/openchamber/npm-global/bin:/openchamber/google-cloud-sdk/bin:$PATH
 gcloud auth application-default login --no-launch-browser
 ```
 
-Both editors also auto-discover Red Hat AI models served via KServe on the cluster — no configuration needed for those.
+T3 Code, OpenChamber, and Orca auto-discover Red Hat AI models served via KServe on the cluster.
+
+### Orca coding agents
+
+OpenCode is installed in Orca's workspace and uses the provider configuration described above. Its configuration, credentials, and session state persist under `/projects/.devspaces-orca`. Other coding agent CLIs can be installed and authenticated from a workspace terminal.
 
 All credentials are persisted to the `/projects` volume — you only need to do this once per workspace lifetime.
 
@@ -128,13 +163,18 @@ make t3-register
 
 # OpenChamber
 make chamber-register
+
+# Orca
+make orca-register
 ```
 
-To remove: `make t3-unregister` / `make chamber-unregister`.
+To remove: `make t3-unregister`, `make chamber-unregister`, or `make orca-unregister`.
+
+For manual Orca registration, set `ORCA_PAIRING_ADDRESS` to the reachable WebSocket URL in `config.env`. `./orca/deploy.sh` sets this from the direct Route automatically.
 
 ## Known Issues
 
-### Both editors
+### T3 Code and OpenChamber
 
 - **Subpath routing** — The Che gateway serves editors under a subpath (e.g. `/username/workspace/port/`). Both editors' assets use absolute paths which break under subpath routing. The deploy scripts work around this by creating a direct Route with its own hostname.
 - **Dashboard "Open" button** — May show "workspace has not received an IDE URL". Use the direct Route URL printed by the deploy script instead.
@@ -168,6 +208,14 @@ To remove: `make t3-unregister` / `make chamber-unregister`.
 │   ├── teardown.sh             # Remove all workspace resources
 │   ├── entrypoint.sh           # Runtime startup with auto-restart
 │   ├── entrypoint-init-container.sh
+│   └── devfile.yaml            # Che editor definition template
+├── orca/
+│   ├── Containerfile           # UBI9 build and injector stages for Orca
+│   ├── deploy.sh               # Deploy and print the browser pairing URL
+│   ├── teardown.sh             # Remove all workspace resources
+│   ├── entrypoint.sh           # Persistent state and runtime startup
+│   ├── entrypoint-init-container.sh
+│   ├── web-client.patch        # Enable web serving and terminal initialization
 │   └── devfile.yaml            # Che editor definition template
 └── openchamber/
     ├── Containerfile           # UBI9 + OpenChamber + OpenCode + gcloud
