@@ -8,7 +8,7 @@ This is an experiment. Direct OpenShift Routes work around Che gateway routing l
 | --- | --- | --- | --- | --- |
 | [T3 Code](https://github.com/pingdotgg/t3code) | OpenCode with optional KServe model discovery | 3773 | Pairing token | Browser |
 | [OpenChamber](https://github.com/openchamber/openchamber) | OpenCode providers, including KServe | 3000 | UI password | Browser |
-| [Orca](https://github.com/stablyai/orca) | Coding agent CLIs, with OpenCode installed | 6768 | Browser pairing URL | Browser |
+| [Orca](https://github.com/stablyai/orca) | OpenCode with KServe model discovery | 6768 | Browser pairing URL | Browser |
 | [VS Code Agent Host](https://code.visualstudio.com/) | Discovered KServe models and OpenCode | 3773 | Connection token | Compatible VS Code client |
 
 VS Code Agent Host exposes an agent service. Its URL is a service endpoint for a compatible client, rather than a browser IDE.
@@ -108,9 +108,11 @@ Keep passwords, pairing URLs, logs, and generated model configuration out of iss
 
 The integrations look for KServe InferenceServices in `sandbox-shared-models`. The workspace service account needs permission to list them and authenticate to their model endpoints. Discovery generates `/projects/opencode.json`; VS Code Agent Host also generates `/projects/chatLanguageModels.json`.
 
-To use another model namespace, add a `REDHAT_AI_NAMESPACE` environment variable to the runtime component in the relevant `deploy.sh` and `devfile.yaml`. The namespace default targets a shared sandbox setup and may not exist on your cluster.
+For Orca, set `REDHAT_AI_NAMESPACE` in `config.env` before running `./orca/deploy.sh`. For the other integrations, add that environment variable to the runtime component in the relevant `deploy.sh` and `devfile.yaml`. The namespace default targets a shared sandbox setup and may not exist on your cluster.
 
-Discovery skips missing or unreachable services. If your cluster has no shared models, configure an OpenCode provider yourself. The generated OpenCode configuration disables OpenCode's own tools for use as an editor backend; adjust that configuration if you want to use OpenCode directly as a coding agent.
+Discovery skips missing or unreachable services. If your cluster has no shared models, configure an OpenCode provider yourself. T3 Code, OpenChamber, and VS Code Agent Host generate a config that disables OpenCode's own tools for use as an editor backend. Orca keeps OpenCode's default tools and permissions.
+
+In Orca, open a terminal in your repository, run `opencode`, and select a Red Hat AI model with `/models`. Orca sets `OPENCODE_CONFIG` to the generated `/projects/opencode.json`, so discovery also works inside cloned repositories and worktrees. OpenCode merges that config with your user and project settings.
 
 ### Other providers
 
@@ -172,6 +174,8 @@ Each editor directory contains its `Containerfile`, `devfile.yaml`, `deploy.sh`,
 `shared/` contains shell setup and KServe discovery. `config.env.example` documents local configuration. The `Makefile` provides build, push, and admin registration targets.
 
 For local changes, check Bash syntax and run ShellCheck before testing a deployment. Keep credentials and rendered devfiles out of commits.
+
+Run the local KServe discovery checks with `python3 -m unittest discover -s tests`. They use mocked cluster responses and require Bash and Node.js.
 
 ## License
 

@@ -1,6 +1,7 @@
 include config.env
 export
 .DEFAULT_GOAL := t3-build
+REDHAT_AI_NAMESPACE ?= sandbox-shared-models
 
 # ---- T3 Code ----
 T3_DIR = t3-code
@@ -86,7 +87,7 @@ orca-push:
 	podman push $(ORCA_IMAGE)
 
 orca-devfile:
-	envsubst '$$ORCA_IMAGE $$GOOGLE_CLOUD_PROJECT $$CLOUD_ML_REGION $$ORCA_PAIRING_ADDRESS' < $(ORCA_DEVFILE) > $(ORCA_DIR)/devfile-rendered.yaml
+	envsubst '$$ORCA_IMAGE $$GOOGLE_CLOUD_PROJECT $$CLOUD_ML_REGION $$ORCA_PAIRING_ADDRESS $$REDHAT_AI_NAMESPACE' < $(ORCA_DEVFILE) > $(ORCA_DIR)/devfile-rendered.yaml
 
 orca-register: check-namespace orca-devfile
 	oc create configmap $(ORCA_CONFIGMAP) \

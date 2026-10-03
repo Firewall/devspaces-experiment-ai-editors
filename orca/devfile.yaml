@@ -51,6 +51,8 @@ components:
           value: "${CLOUD_ML_REGION}"
         - name: ORCA_PAIRING_ADDRESS
           value: "${ORCA_PAIRING_ADDRESS}"
+        - name: REDHAT_AI_NAMESPACE
+          value: "${REDHAT_AI_NAMESPACE}"
       volumeMounts:
         - name: orca
           path: /orca

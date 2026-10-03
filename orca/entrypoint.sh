@@ -38,7 +38,11 @@ ln -sfn "$PERSIST/opencode-state" "$HOME/.local/state/opencode"
 ln -sfn "$PERSIST/gcloud" "$HOME/.config/gcloud"
 
 if [ -f /orca/discover-models.sh ]; then
-  bash /orca/discover-models.sh "${PROJECTS_ROOT:-/projects}/opencode.json"
+  bash /orca/discover-models.sh "${PROJECTS_ROOT:-/projects}/opencode.json" agent
+fi
+# Load discovered providers even inside repositories and worktrees under /projects.
+if [ -s "${PROJECTS_ROOT:-/projects}/opencode.json" ]; then
+  export OPENCODE_CONFIG="${PROJECTS_ROOT:-/projects}/opencode.json"
 fi
 
 cd "${PROJECTS_ROOT:-/projects}" || exit 1

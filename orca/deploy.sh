@@ -83,6 +83,8 @@ spec:
             value: "${CLOUD_ML_REGION}"
           - name: ORCA_PAIRING_ADDRESS
             value: "${ORCA_PAIRING_ADDRESS}"
+          - name: REDHAT_AI_NAMESPACE
+            value: "${REDHAT_AI_NAMESPACE:-sandbox-shared-models}"
         volumeMounts:
           - name: orca
             path: /orca
@@ -191,7 +193,7 @@ echo ""
 echo "URL:      ${WEB_URL}"
 echo "Shell:    oc exec -it $POD -c orca-runtime -n $NAMESPACE -- bash"
 echo ""
-echo "OpenCode is installed and auto-discovers in-cluster Red Hat AI models."
+echo "Start OpenCode in an Orca terminal and use /models to select a Red Hat AI model."
 echo "Configure other providers in ~/.config/opencode/config.json."
 echo "For Vertex AI, shell in and run:"
 echo "  export PATH=/orca/npm-global/bin:/orca/google-cloud-sdk/bin:\$PATH"
