@@ -1,0 +1,80 @@
+schemaVersion: 2.2.2
+metadata:
+  name: ibm/bob-editor/poc
+  displayName: Headless Bob console PoC
+  description: Browser console with a shared repository and selectable Bob or OpenCode backend
+  attributes:
+    publisher: community
+    version: poc
+    title: Headless Bob console PoC
+    repository: https://github.com/ibm-self-serve-assets/building-blocks
+commands:
+  - id: install-opencode
+    apply:
+      component: opencode-injector
+events:
+  preStart:
+    - install-opencode
+components:
+  - name: bob-runtime
+    container:
+      image: ${BOB_IMAGE}
+      mountSources: true
+      sourceMapping: /projects
+      env:
+        - name: BOB_WORKSPACE_DIR
+          value: /projects/repo
+        - name: OPENCODE_MODEL
+          value: "${BOB_OPENCODE_MODEL}"
+        - name: PATH
+          value: /injected-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        - name: XDG_CONFIG_HOME
+          value: /projects/.devspaces-bob/home/.config
+        - name: XDG_DATA_HOME
+          value: /projects/.devspaces-bob/home/.local/share
+        - name: XDG_STATE_HOME
+          value: /projects/.devspaces-bob/home/.local/state
+        - name: XDG_CACHE_HOME
+          value: /projects/.devspaces-bob/home/.cache
+      volumeMounts:
+        - name: injected-tools
+          path: /injected-tools
+      memoryLimit: 4096Mi
+      memoryRequest: 1024Mi
+      cpuLimit: 2000m
+      cpuRequest: 200m
+      endpoints:
+        - name: bob
+          targetPort: 8000
+          exposure: public
+          protocol: https
+          secure: true
+          attributes:
+            type: main
+            cookiesAuthEnabled: true
+            discoverable: false
+            urlRewriteSupported: true
+    attributes:
+      app.kubernetes.io/component: bob-runtime
+      app.kubernetes.io/part-of: bob.eclipse.org
+  - name: opencode-injector
+    attributes:
+      che.eclipse.org/admin-manageable: true
+    container:
+      image: quay.io/che-incubator/dashboard-ai/opencode@sha256:11be643a79b29935ca0b7a8835201fce165dbe6aca646cec8dd05c742d43ee5b
+      command:
+        - /bin/sh
+      args:
+        - -ec
+        - mkdir -p /injected-tools/bin && cp /usr/local/bin/opencode /usr/local/bin/opencode-bin /injected-tools/bin/
+      mountSources: false
+      memoryLimit: 1024Mi
+      volumeMounts:
+        - name: injected-tools
+          path: /injected-tools
+  - name: injected-tools
+    attributes:
+      che.eclipse.org/admin-manageable: true
+    volume:
+      ephemeral: true
+      size: 512Mi

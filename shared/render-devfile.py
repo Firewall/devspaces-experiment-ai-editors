@@ -13,13 +13,14 @@ except ImportError:
     sys.exit("Install the devfile renderer dependency with: python3 -m pip install -r requirements.txt")
 
 
-IMAGE_VARIABLES = {"T3_IMAGE", "OPENCHAMBER_IMAGE", "ORCA_IMAGE", "AGENT_HOST_IMAGE"}
+IMAGE_VARIABLES = {"T3_IMAGE", "OPENCHAMBER_IMAGE", "ORCA_IMAGE", "AGENT_HOST_IMAGE", "BOB_IMAGE"}
 DEFAULTS = {
     "GOOGLE_CLOUD_PROJECT": "",
     "CLOUD_ML_REGION": "",
     "OPENCHAMBER_UI_PASSWORD": "",
     "ORCA_PAIRING_ADDRESS": "",
     "REDHAT_AI_NAMESPACE": "",
+    "BOB_OPENCODE_MODEL": "opencode/glm-5.3-flash-free",
 }
 PLACEHOLDER = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
 

@@ -1,0 +1,66 @@
+FROM node:24-bookworm-slim AS build
+ARG HEADLESSBOB_REV=6c4a26ff8d315d0ec9fdebffb03e27f0bf9aa879
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /upstream
+RUN git init && git remote add origin https://github.com/ibm-self-serve-assets/building-blocks.git \
+    && git fetch --depth 1 origin ${HEADLESSBOB_REV} && git checkout --detach FETCH_HEAD
+WORKDIR /upstream/ai/engineering/headless-bob/assets/headlessbob
+COPY bob/shared-repository.patch /tmp/shared-repository.patch
+COPY bob/dependencies.patch /tmp/dependencies.patch
+COPY bob/opencode-backend.patch /tmp/opencode-backend.patch
+COPY bob/shared-repository.test.mjs /tmp/shared-repository.test.mjs
+COPY bob/opencode-backend.test.mjs /tmp/opencode-backend.test.mjs
+COPY bob/fixtures/opencode-acp.mjs /tmp/fixtures/opencode-acp.mjs
+COPY bob/opencode-config*.mjs /tmp/
+RUN git -C /upstream apply /tmp/shared-repository.patch /tmp/dependencies.patch /tmp/opencode-backend.patch && npm ci && npm run build \
+    && HEADLESSBOB_DIR="$PWD" node --test /tmp/shared-repository.test.mjs /tmp/opencode-backend.test.mjs /tmp/opencode-config.test.mjs \
+    && npm prune --omit=dev
+COPY bob/shared-workspace-ui.patch /tmp/shared-workspace-ui.patch
+RUN git -C /upstream apply /tmp/shared-workspace-ui.patch
+
+FROM build AS opencode-ui
+COPY bob/opencode-branding.mjs /tmp/opencode-branding.mjs
+RUN node /tmp/opencode-branding.mjs public
+
+FROM build AS bob-package
+RUN sh scripts/download-bob.sh
+
+FROM node:24-bookworm-slim AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git python3 tini \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=build /upstream/ai/engineering/headless-bob/assets/headlessbob/package*.json ./
+COPY --from=build /upstream/ai/engineering/headless-bob/assets/headlessbob/node_modules ./node_modules
+COPY --from=build /upstream/ai/engineering/headless-bob/assets/headlessbob/dist ./dist
+COPY --from=build /upstream/ai/engineering/headless-bob/assets/headlessbob/public ./public
+COPY --from=build /upstream/ai/engineering/headless-bob/assets/headlessbob/spec ./spec
+COPY --from=build /upstream/ai/engineering/headless-bob/assets/headlessbob/examples ./examples
+COPY --from=build /upstream/LICENSE /usr/share/licenses/headlessbob/LICENSE
+COPY bob/shared-repository.patch /usr/share/licenses/headlessbob/shared-repository.patch
+COPY bob/dependencies.patch /usr/share/licenses/headlessbob/dependencies.patch
+COPY bob/shared-workspace-ui.patch /usr/share/licenses/headlessbob/shared-workspace-ui.patch
+COPY bob/opencode-backend.patch /usr/share/licenses/headlessbob/opencode-backend.patch
+COPY bob/opencode-config.mjs /usr/local/bin/opencode-config.mjs
+COPY bob/entrypoint.sh /usr/local/bin/bob-entrypoint
+RUN chmod 0755 /usr/local/bin/bob-entrypoint && mkdir -p /projects \
+    && chgrp 0 /projects && chmod g=u /projects
+ENV NODE_ENV=production HOME=/projects/.devspaces-bob/home HOST=0.0.0.0 PORT=8000 ALLOW_TRUSTED_NETWORK=true \
+    MAX_CONCURRENT=1 MAX_QUEUED=10 BOB_ENABLE_CONTINUATION=true
+USER 1001
+EXPOSE 8000
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/bob-entrypoint"]
+
+FROM runtime AS opencode
+COPY --from=opencode-ui /upstream/ai/engineering/headless-bob/assets/headlessbob/public ./public
+ENV AGENT_BACKEND=opencode
+
+FROM runtime AS bob
+USER 0
+COPY --from=bob-package /upstream/ai/engineering/headless-bob/assets/headlessbob/vendor/bobshell-2.0.4.tgz /tmp/bobshell.tgz
+RUN echo '10de047ffdc23a50f3e1ef69fad3b6313ff6dda0010589a22efe26b24685254b  /tmp/bobshell.tgz' | sha256sum -c - \
+    && npm install --prefix /opt/bobshell /tmp/bobshell.tgz --omit=dev && rm /tmp/bobshell.tgz \
+    && printf '%s\n' '#!/bin/sh' 'exec env BOBSHELL_NO_RELAUNCH=true /usr/local/bin/node /opt/bobshell/node_modules/bobshell/dist/bob.js "$@"' > /usr/local/bin/bob \
+    && chmod 0755 /usr/local/bin/bob
+ENV AGENT_BACKEND=bob
+USER 1001
