@@ -1,0 +1,93 @@
+diff --git a/ai/engineering/headless-bob/assets/headlessbob/src/config.ts b/ai/engineering/headless-bob/assets/headlessbob/src/config.ts
+--- a/ai/engineering/headless-bob/assets/headlessbob/src/config.ts
++++ b/ai/engineering/headless-bob/assets/headlessbob/src/config.ts
+@@ -1,7 +1,7 @@
+ // Dev Spaces modification: optional single-owner shared repository.
+ import { resolve } from 'node:path';
+ export interface Config {
+-  host: string; port: number; dataDir: string; workspaceDir?: string; bobBin: string; bobMode: string;
++  host: string; port: number; dataDir: string; workspaceDir?: string; backend?: 'bob' | 'opencode'; bobBin: string; bobMode: string;
+   maxConcurrent: number; maxQueued: number; timeoutMs: number; killGraceMs: number;
+   maxOutputBytes: number; maxEvents: number; maxBodyBytes: number; maxTurns: number; maxCost: number;
+   continuation: boolean; tokens: Record<string, string>; bobEnv: NodeJS.ProcessEnv;
+@@ -19,15 +19,22 @@
+   if (!['localhost', '127.0.0.1', '::1'].includes(host) && (!Object.keys(tokens).length || env.ALLOW_TRUSTED_NETWORK !== 'true')) throw new Error('Non-loopback binding requires AUTH_TOKENS and ALLOW_TRUSTED_NETWORK=true; use only on a trusted isolated network');
+   const workspaceDir = env.BOB_WORKSPACE_DIR ? resolve(env.BOB_WORKSPACE_DIR) : undefined;
+   if (workspaceDir && (Object.keys(tokens).length !== 1 || number(env, 'MAX_CONCURRENT', 2, 1, 32) !== 1)) throw new Error('Shared repository requires one owner and MAX_CONCURRENT=1');
++  const backend = env.AGENT_BACKEND ?? 'bob';
++  if (backend !== 'bob' && backend !== 'opencode') throw new Error('AGENT_BACKEND must be bob or opencode');
+   const bobEnv: NodeJS.ProcessEnv = {};
+   // Service tokens and unrelated credentials never enter the child environment.
+-  for (const key of ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'BOB_API_KEY', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'NODE_EXTRA_CA_CERTS']) if (env[key]) bobEnv[key] = env[key];
+-  bobEnv.BOBSHELL_NO_RELAUNCH = 'true';
+-  const bobMode = env.BOB_MODE ?? 'agent';
++  for (const key of ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'NODE_EXTRA_CA_CERTS']) if (env[key]) bobEnv[key] = env[key];
++  if (backend === 'opencode') {
++    for (const key of ['OPENCODE_CONFIG', 'OPENCODE_CONFIG_CONTENT', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME']) if (env[key]) bobEnv[key] = env[key];
++  } else {
++    if (env.BOB_API_KEY) bobEnv.BOB_API_KEY = env.BOB_API_KEY;
++    bobEnv.BOBSHELL_NO_RELAUNCH = 'true';
++  }
++  const bobMode = env.BOB_MODE ?? (backend === 'opencode' ? 'build' : 'agent');
+   if (!/^[a-zA-Z0-9_-]+$/.test(bobMode)) throw new Error('Invalid BOB_MODE');
+   return {
+-    host, workspaceDir, port: number(env, 'PORT', 8000, 0, 65535), dataDir: resolve(env.DATA_DIR ?? '.headlessbob'),
+-    bobBin: env.BOB_BIN ?? 'bob', bobMode, tokens, bobEnv, continuation: env.BOB_ENABLE_CONTINUATION === 'true',
++    host, workspaceDir, backend, port: number(env, 'PORT', 8000, 0, 65535), dataDir: resolve(env.DATA_DIR ?? '.headlessbob'),
++    bobBin: env.BOB_BIN ?? (backend === 'opencode' ? 'opencode' : 'bob'), bobMode, tokens, bobEnv, continuation: env.BOB_ENABLE_CONTINUATION === 'true',
+     maxConcurrent: number(env, 'MAX_CONCURRENT', 2, 1, 32), maxQueued: number(env, 'MAX_QUEUED', 100, 1, 10000),
+     timeoutMs: number(env, 'RUN_TIMEOUT_MS', 300000, 1, 2147483647), killGraceMs: number(env, 'KILL_GRACE_MS', 2000, 1, 60000),
+     maxOutputBytes: number(env, 'MAX_OUTPUT_BYTES', 2097152, 128, 16777216), maxEvents: number(env, 'MAX_EVENTS', 10000, 16, 100000),
+diff --git a/ai/engineering/headless-bob/assets/headlessbob/src/runtime/client.ts b/ai/engineering/headless-bob/assets/headlessbob/src/runtime/client.ts
+--- a/ai/engineering/headless-bob/assets/headlessbob/src/runtime/client.ts
++++ b/ai/engineering/headless-bob/assets/headlessbob/src/runtime/client.ts
+@@ -1,3 +1,4 @@
++// Dev Spaces modification: selectable Bob or OpenCode ACP backend.
+ import { spawn } from 'node:child_process';
+ import { StringDecoder } from 'node:string_decoder';
+ import { setTimeout as delay } from 'node:timers/promises';
+@@ -8,11 +9,20 @@
+ /** Shared REST and partner runtime using Agent Client Protocol v1 over stdio. */
+ export class BobClientRuntime implements Runtime {
+   constructor(private config: Config, private observe: (event: { method: string; detail: unknown }) => void = () => {}) {}
+-  ready() { return new BobRuntime(this.config).ready(); }
++  async ready() {
++    if (this.config.backend !== 'opencode') return new BobRuntime(this.config).ready();
++    return new Promise<{ ready: boolean; reason?: string }>(resolve => {
++      const child = spawn(this.config.bobBin, ['--version'], { env: this.config.bobEnv, stdio: ['ignore', 'pipe', 'ignore'], timeout: 10000 });
++      let output = '';
++      child.stdout.on('data', data => { if (output.length < 4096) output += data.toString(); });
++      child.on('error', () => resolve({ ready: false, reason: 'OpenCode executable is unavailable' }));
++      child.on('close', code => resolve(code === 0 && /^\d+\.\d+\.\d+(?:\s|$)/.test(output) ? { ready: true } : { ready: false, reason: 'OpenCode version check failed' }));
++    });
++  }
+   async run(execution: Execution) {
+     const c = this.config;
+     if (execution.signal.aborted) throw new RuntimeError('cancelled', 'Run cancelled');
+-    const child = spawn(c.bobBin, ['acp', '--trust', '--disable-mcp', '--disable-subagents'], {
++    const child = spawn(c.bobBin, c.backend === 'opencode' ? ['acp', '--pure'] : ['acp', '--trust', '--disable-mcp', '--disable-subagents'], {
+       cwd: execution.workspace, env: c.bobEnv, detached: true, stdio: ['pipe', 'pipe', 'pipe'],
+     });
+     let nextId = 0, bytes = 0, pendingText = '', text = '', sessionId = '', prompting = false;
+@@ -84,7 +94,7 @@
+             const item = pending.get(message.id); if (!item) continue;
+             pending.delete(message.id);
+             if (item.method === 'session/prompt') prompting = false;
+-            if (message.error) item.reject(new RuntimeError(item.method === 'session/resume' ? 'session_recovery' : 'acp_error', 'Bob ACP request failed'));
++            if (message.error) item.reject(new RuntimeError(['session/resume', 'session/load'].includes(item.method) ? 'session_recovery' : 'acp_error', 'Bob ACP request failed'));
+             else {
+               if (item.method === 'session/new') sessionId = message.result?.sessionId;
+               item.resolve(message.result);
+@@ -101,9 +111,10 @@
+       const params = { cwd: execution.workspace, mcpServers: [] };
+       let setup;
+       if (execution.taskId) {
+-        if (!init.agentCapabilities?.sessionCapabilities?.resume) throw new RuntimeError('session_recovery', 'Bob does not support session/resume');
++        const method = init.agentCapabilities?.sessionCapabilities?.resume ? 'session/resume' : c.backend === 'opencode' && init.agentCapabilities?.loadSession ? 'session/load' : undefined;
++        if (!method) throw new RuntimeError('session_recovery', 'Agent does not support session continuation');
+         sessionId = execution.taskId;
+-        setup = await rpc('session/resume', { ...params, sessionId });
++        setup = await rpc(method, { ...params, sessionId });
+         this.observe({ method: 'session/resume', detail: 'success' });
+       } else {
+         setup = await rpc('session/new', params); sessionId = setup.sessionId;

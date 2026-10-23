@@ -40,16 +40,18 @@ class EditorScriptTests(unittest.TestCase):
         shutil.copyfile(REPO / "shared/deploy.sh", self.root / "shared/deploy.sh")
         shutil.copyfile(REPO / "shared/render-devfile.py", self.root / "shared/render-devfile.py")
         shutil.copyfile(REPO / "Makefile", self.root / "Makefile")
-        for editor in EDITORS:
+        for editor in [*EDITORS, "bob"]:
             (self.root / editor).mkdir()
             for name in ("deploy.sh", "teardown.sh", "devfile.yaml"):
                 shutil.copyfile(REPO / editor / name, self.root / editor / name)
+        shutil.copyfile(REPO / "bob/configure.sh", self.root / "bob/configure.sh")
         (self.root / "config.env").write_text(
             "NAMESPACE=test-workspaces\n"
             "T3_IMAGE=localhost/test-t3\n"
             "OPENCHAMBER_IMAGE=localhost/test-chamber\n"
             "ORCA_IMAGE=localhost/test-orca\n"
             "AGENT_HOST_IMAGE=localhost/test-vscode\n"
+            "BOB_IMAGE=localhost/test-bob\n"
             "GOOGLE_CLOUD_PROJECT=test-project\n"
             "CLOUD_ML_REGION=test-region\n"
             "OPENCHAMBER_UI_PASSWORD=test-password\n"
@@ -202,6 +204,60 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 for entry in commands:
                     if entry["tool"] == "oc":
                         self.assertEqual(entry["args"][entry["args"].index("-n") + 1], "test-workspaces")
+
+    def test_bob_deploys_shared_repository_with_authenticated_direct_route(self):
+        result, commands = self.run_script("bob", "deploy.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([command["args"][0] for command in commands[:2]], ["build", "push"])
+        manifests = [manifest for command in commands if "manifest" in command
+                     for manifest in yaml.safe_load_all(command["manifest"])]
+        template = next(manifest for manifest in manifests if manifest["kind"] == "DevWorkspaceTemplate")
+        runtime = template["spec"]["components"][0]["container"]
+        self.assertEqual(runtime["image"], "localhost/test-bob")
+        self.assertIn({"name": "BOB_WORKSPACE_DIR", "value": "/projects/repo"}, runtime["env"])
+        self.assertNotIn("BOB_API_KEY", json.dumps(template))
+        route = next(manifest for manifest in manifests if manifest["kind"] == "Route")
+        self.assertEqual(route["metadata"]["name"], "bob-direct")
+        self.assertEqual(route["spec"]["tls"]["insecureEdgeTerminationPolicy"], "Redirect")
+        self.assertEqual(route["metadata"]["annotations"]["haproxy.router.openshift.io/timeout"], "6m")
+        self.assertFalse(any(command["args"][:2] == ["annotate", "route"] for command in commands))
+
+    def test_bob_can_build_the_opencode_target_with_a_free_model(self):
+        config = self.root / "config.env"
+        config.write_text(config.read_text() + "BOB_BACKEND=opencode\nBOB_OPENCODE_MODEL=opencode/glm-5.3-flash-free\n")
+        result, commands = self.run_script("bob", "deploy.sh")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        build = commands[0]["args"]
+        self.assertEqual(build[build.index("--target") + 1], "opencode")
+        template = next(yaml.safe_load(command["manifest"]) for command in commands
+                        if "kind: DevWorkspaceTemplate\n" in command.get("manifest", ""))
+        runtime = template["spec"]["components"][0]["container"]
+        self.assertIn({"name": "OPENCODE_MODEL", "value": "opencode/glm-5.3-flash-free"}, runtime["env"])
+
+    def test_bob_credentials_are_scoped_and_only_import_license_consent(self):
+        key = self.root / "private-key"
+        key.write_text("fixture-api-key-not-a-real-credential")
+        settings = self.root / "settings.json"
+        settings.write_text(json.dumps({"licenseConsent": True, "personalSetting": "do-not-copy"}))
+        result = subprocess.run(["bash", str(self.root / "bob/configure.sh"), str(key), str(settings)],
+                                env=self.env, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        manifest = json.loads(self.command_log()[0]["manifest"])
+        self.assertEqual(manifest["metadata"]["annotations"]["controller.devfile.io/mount-to-devworkspace-include"], "bob-workspace")
+        self.assertEqual(manifest["metadata"]["annotations"]["controller.devfile.io/mount-on-start"], "true")
+        self.assertEqual(json.loads(manifest["stringData"]["settings.json"]), {"licenseConsent": True})
+        self.assertNotIn(key.read_text(), result.stdout + result.stderr)
+
+    def test_bob_requires_saved_license_consent_before_creating_credentials(self):
+        key = self.root / "private-key"
+        key.write_text("fixture-api-key-not-a-real-credential")
+        settings = self.root / "settings.json"
+        settings.write_text('{"licenseConsent":false}')
+        result = subprocess.run(["bash", str(self.root / "bob/configure.sh"), str(key), str(settings)],
+                                env=self.env, capture_output=True, text=True, timeout=15)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Review and accept", result.stderr)
+        self.assertEqual(self.command_log(), [])
 
     def test_all_deployments_leave_model_namespace_empty_when_unconfigured(self):
         config = self.root / "config.env"

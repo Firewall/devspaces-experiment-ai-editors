@@ -1,0 +1,50 @@
+diff --git a/ai/engineering/headless-bob/assets/headlessbob/public/app.js b/ai/engineering/headless-bob/assets/headlessbob/public/app.js
+index c17694d..2970579 100644
+--- a/ai/engineering/headless-bob/assets/headlessbob/public/app.js
++++ b/ai/engineering/headless-bob/assets/headlessbob/public/app.js
+@@ -1,3 +1,4 @@
++// Dev Spaces modification: explain the shared repository.
+ 'use strict';
+ const $ = id => document.getElementById(id);
+ const state = { token: '', session: 0, view: 0, listRequest: 0, thread: null, run: null, messages: [], threads: [], nextThreads: null, nextMessages: null, archived: false, sending: false, watch: null, pendingSend: null, drafts: new Map() };
+@@ -149,7 +150,7 @@ function renderContext() {
+   const status = thread?.archived ? 'Archived' : thread?.status === 'needs_new_thread' ? 'New thread needed' : run ? labels[run.status] : 'Ready for a task';
+   $('run-status').textContent = status;
+   $('run-status').className = `status-badge${busy ? ' busy' : thread?.status === 'needs_new_thread' ? ' failed' : ''}`;
+-  $('thread-context').textContent = thread?.status === 'needs_new_thread' ? 'This session stopped. Start a new thread to continue safely.' : thread?.archived ? 'Restore this thread to send a message.' : thread?.session_id ? 'Continuing in the same Bob workspace.' : 'A new workspace is created with your first message.';
++  $('thread-context').textContent = thread?.status === 'needs_new_thread' ? 'This session stopped. Start a new thread to continue safely.' : thread?.archived ? 'Restore this thread to send a message.' : thread?.session_id ? 'Continuing in the shared repository.' : 'All threads edit the same repository.';
+   $('run-details').hidden = !run; $('run-json').textContent = run ? JSON.stringify(run, null, 2) : '';
+   $('character-count').textContent = `${$('message-input').value.length.toLocaleString()} / 20,000`;
+ }
+diff --git a/ai/engineering/headless-bob/assets/headlessbob/public/index.html b/ai/engineering/headless-bob/assets/headlessbob/public/index.html
+index 3708d7c..b653b53 100644
+--- a/ai/engineering/headless-bob/assets/headlessbob/public/index.html
++++ b/ai/engineering/headless-bob/assets/headlessbob/public/index.html
+@@ -1,3 +1,4 @@
++<!-- Dev Spaces modification: explain the shared repository. -->
+ <!doctype html>
+ <html lang="en">
+ <head>
+@@ -78,7 +79,7 @@
+           <span class="empty-mark" aria-hidden="true">b.</span>
+           <p class="eyebrow">A LITTLE CONTEXT GOES A LONG WAY</p>
+           <h2>What would you like Bob to do?</h2>
+-          <p>A thread keeps your conversation and workspace together.<br>Each message starts a new run.</p>
++          <p>Each thread keeps its own conversation.<br>All threads edit the same repository.</p>
+           <div class="suggestions">
+             <button class="suggestion" data-prompt="Create a README for a tiny todo app. Include setup instructions and a short feature list."><span>Build something</span>Create a project README <b aria-hidden="true">↗</b></button>
+             <button class="suggestion" data-prompt="Write a Python function that validates email addresses, with a few example inputs and outputs."><span>Try a coding task</span>Write a Python function <b aria-hidden="true">↗</b></button>
+@@ -92,11 +93,11 @@
+       <section class="composer-area">
+-        <div class="run-strip"><span id="run-status" class="status-badge">Ready for a task</span><span id="thread-context">A new workspace is created with your first message.</span></div>
++        <div class="run-strip"><span id="run-status" class="status-badge">Ready for a task</span><span id="thread-context">All threads edit the same repository.</span></div>
+         <form id="message-form" class="composer">
+           <label class="sr-only" for="message-input">Message Bob</label>
+           <textarea id="message-input" placeholder="Give Bob a task, or ask a follow-up…" rows="3" maxlength="20000"></textarea>
+           <div class="composer-bottom"><span>Enter to send <span class="dot-separator">·</span> Shift + Enter for a new line</span><div class="composer-actions"><button id="cancel-run" class="button cancel-button" type="button" disabled title="No active run to cancel">Cancel run</button><button id="send-message" class="button primary" type="submit">Send message <span aria-hidden="true">↑</span></button></div></div>
+         </form>
+-        <div class="composer-footnote"><span id="composer-hint">Bob can edit files and run commands in this thread’s workspace.</span><span id="character-count">0 / 20,000</span></div>
++        <div class="composer-footnote"><span id="composer-hint">Bob can edit files and run commands in the shared repository.</span><span id="character-count">0 / 20,000</span></div>
+         <details id="run-details" class="run-details" hidden><summary>Run details</summary><pre id="run-json"></pre></details>
+       </section>
+       </div>

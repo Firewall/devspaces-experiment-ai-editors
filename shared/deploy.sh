@@ -12,17 +12,21 @@ load_config() {
 }
 
 build_and_push_image() {
-  local image="$1" editor_dir="$2"
+  local image="$1" editor_dir="$2" target="${3:-}"
+  local target_args=()
+  if [ -n "$target" ]; then
+    target_args=(--target "$target")
+  fi
   echo "Building image for linux/amd64..."
-  podman build --platform linux/amd64 -f "$editor_dir/Containerfile" -t "$image" "$REPO_ROOT"
+  podman build --platform linux/amd64 "${target_args[@]}" -f "$editor_dir/Containerfile" -t "$image" "$REPO_ROOT"
   echo "Pushing image..."
   podman push "$image"
 }
 
 render_devfile() (
-  export T3_IMAGE OPENCHAMBER_IMAGE ORCA_IMAGE AGENT_HOST_IMAGE \
+  export T3_IMAGE OPENCHAMBER_IMAGE ORCA_IMAGE AGENT_HOST_IMAGE BOB_IMAGE \
     GOOGLE_CLOUD_PROJECT CLOUD_ML_REGION OPENCHAMBER_UI_PASSWORD \
-    ORCA_PAIRING_ADDRESS REDHAT_AI_NAMESPACE
+    ORCA_PAIRING_ADDRESS REDHAT_AI_NAMESPACE BOB_OPENCODE_MODEL
   python3 "$REPO_ROOT/shared/render-devfile.py" "$@"
 )
 
@@ -98,6 +102,14 @@ wait_for_workspace() {
 
 create_direct_route() {
   local route="$1" port="$2" selector_key="$3" selector_value="$4"
+  local timeout="${5:-}" annotations=""
+  if [ -n "$timeout" ]; then
+    if [[ ! "$timeout" =~ ^[0-9]+[smh]$ ]]; then
+      echo "Route timeout must be a duration such as 30s or 6m." >&2
+      return 1
+    fi
+    printf -v annotations '  annotations:\n    haproxy.router.openshift.io/timeout: %s' "$timeout"
+  fi
   echo "Creating direct route..."
   cat <<EOF | oc apply -n "$NAMESPACE" -f -
 apiVersion: v1
@@ -115,6 +127,7 @@ apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
   name: ${route}
+${annotations}
 spec:
   to:
     kind: Service

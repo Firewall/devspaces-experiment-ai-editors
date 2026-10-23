@@ -2,6 +2,8 @@
 
 Run T3 Code, OpenChamber, Orca, or VS Code Agent Host in OpenShift Dev Spaces workspaces. This repository contains container recipes, devfiles, and scripts that build an image and create a workspace in your user namespace.
 
+A [Headless Bob proof of concept](bob/README.md) adds a browser console with a shared repository. Select OpenCode with a free model or IBM Bob Shell with a Bob subscription. Start with `./bob/deploy.sh` after setting `BOB_IMAGE` and `BOB_BACKEND` in `config.env`.
+
 This is an experiment. Direct OpenShift Routes work around Che gateway routing limitations, and upstream editor changes can break the integrations. It is a community project with no production support commitment.
 
 | Integration | AI setup | Port | Authentication | Client |

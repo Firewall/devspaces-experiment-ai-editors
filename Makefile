@@ -22,12 +22,17 @@ VSCODE_DIR = vs-code-agent-host
 VSCODE_CONFIGMAP ?= vs-code-agent-host-editor-definition
 VSCODE_DEVFILE = $(VSCODE_DIR)/devfile.yaml
 
+BOB_DIR = bob
+BOB_CONFIGMAP ?= bob-editor-definition
+BOB_DEVFILE = $(BOB_DIR)/devfile.yaml
+
 .PHONY: check-namespace t3-build t3-push t3-register t3-unregister t3-devfile \
         chamber-build chamber-push chamber-register chamber-unregister chamber-devfile \
         orca-build orca-push orca-register orca-unregister orca-devfile \
         orca-deploy orca-teardown \
         vscode-build vscode-push vscode-deploy vscode-test vscode-teardown \
-        vscode-register vscode-unregister vscode-devfile
+        vscode-register vscode-unregister vscode-devfile \
+        bob-build bob-push bob-deploy bob-test bob-teardown bob-register bob-unregister bob-devfile
 
 check-namespace:
 	@test -n "$(NAMESPACE)" || { echo "Set NAMESPACE in config.env before registering or removing editors."; exit 1; }
@@ -138,3 +143,30 @@ vscode-teardown:
 
 vscode-unregister: check-namespace
 	oc delete configmap $(VSCODE_CONFIGMAP) -n $(NAMESPACE)
+
+# === IBM Bob PoC targets ===
+bob-build:
+	podman build --platform linux/amd64 --target $(or $(BOB_BACKEND),bob) -f $(BOB_DIR)/Containerfile -t $(BOB_IMAGE) .
+
+bob-push:
+	podman push $(BOB_IMAGE)
+
+bob-deploy:
+	$(BOB_DIR)/deploy.sh
+
+bob-test:
+	$(BOB_DIR)/test.sh
+
+bob-teardown:
+	$(BOB_DIR)/teardown.sh
+
+bob-devfile:
+	python3 shared/render-devfile.py "$(BOB_DEVFILE)" --output "$(BOB_DIR)/devfile-rendered.yaml"
+
+bob-register: check-namespace bob-devfile
+	oc create configmap $(BOB_CONFIGMAP) --from-file=$(BOB_DIR)/devfile-rendered.yaml -n $(NAMESPACE)
+	oc label configmap $(BOB_CONFIGMAP) app.kubernetes.io/part-of=che.eclipse.org app.kubernetes.io/component=editor-definition -n $(NAMESPACE)
+	@rm -f $(BOB_DIR)/devfile-rendered.yaml
+
+bob-unregister: check-namespace
+	oc delete configmap $(BOB_CONFIGMAP) -n $(NAMESPACE)
