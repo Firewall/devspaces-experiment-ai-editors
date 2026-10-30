@@ -34,7 +34,7 @@ RUN ARCH=$(uname -m) && \
     curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
       | tar -xz -C /usr/lib
 
-ARG OPENCODE_VERSION=1.18.34
+ARG OPENCODE_VERSION=1.19.5
 RUN npm install -g "opencode-ai@${OPENCODE_VERSION}"
 
 COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
