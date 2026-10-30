@@ -26,5 +26,9 @@ connection-token
 **/connection-token
 chatLanguageModels.json
 **/chatLanguageModels.json
+openclaw.json
+**/openclaw.json
+gateway-token
+**/gateway-token
 opencode.json
 **/opencode.json

@@ -1,0 +1,36 @@
+# OpenClaw requires Node 24.22+ (or Node 26), so this integration runs its own
+# image instead of injecting into the universal developer image's Node 22.
+ARG OPENCLAW_VERSION=2026.10.9
+FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION}
+
+USER 0
+
+# OpenClaw downloads pinned ripgrep and fd helpers on first use. Ship system
+# copies so agent search works without an outbound download; Debian names the
+# fd binary fdfind.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ripgrep fd-find && \
+    ln -s /usr/bin/fdfind /usr/local/bin/fd && \
+    rm -rf /var/lib/apt/lists/*
+
+# OpenShift CLI for KServe model discovery, matching the other integrations.
+RUN curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz" \
+      | tar xz -C /usr/local/bin oc kubectl && \
+    chmod 755 /usr/local/bin/oc /usr/local/bin/kubectl
+
+COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
+COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
+COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
+COPY openclaw/seed-config.sh /usr/local/bin/openclaw-seed-config.sh
+COPY openclaw/entrypoint.sh /usr/local/bin/openclaw-entrypoint.sh
+
+# OpenShift runs an arbitrary UID in GID 0. Make the passwd entry writable so
+# startup can add one, and keep the injected scripts executable.
+RUN chmod 755 /usr/local/bin/shared-*.sh /usr/local/bin/openclaw-*.sh && \
+    chgrp 0 /etc/passwd && chmod g=u /etc/passwd
+
+USER node
+
+ENV OPENCLAW_GATEWAY_PORT=18789
+
+ENTRYPOINT ["/usr/local/bin/openclaw-entrypoint.sh"]

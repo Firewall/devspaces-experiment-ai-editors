@@ -56,12 +56,16 @@ class KServeDiscoveryTests(unittest.TestCase):
         path.write_text(f"#!/bin/bash\n{body}\n")
         path.chmod(0o755)
 
-    def discover(self, profile=None, vscode_output=None):
+    def discover(self, profile=None, vscode_output=None, openclaw_output=None):
+        if openclaw_output is not None and profile is None:
+            profile = "backend"
         args = ["bash", str(REPO / "shared/discover-models.sh"), str(self.output)]
         if profile is not None or vscode_output is not None:
             args.append(profile or "backend")
-        if vscode_output is not None:
-            args.append(str(vscode_output))
+        if vscode_output is not None or openclaw_output is not None:
+            args.append(str(vscode_output) if vscode_output is not None else "")
+        if openclaw_output is not None:
+            args.append(str(openclaw_output))
         return subprocess.run(args, env=self.env, capture_output=True, text=True)
 
     def test_backend_keeps_existing_tool_policy(self):
@@ -171,6 +175,28 @@ class KServeDiscoveryTests(unittest.TestCase):
         self.assertNotIn("test-service-token", result.stdout + result.stderr)
         self.assertEqual(len((self.root / "curl.log").read_text().splitlines()), 2)
         self.assertEqual(len((self.root / "oc.log").read_text().splitlines()), 1)
+
+    def test_openclaw_fragment_maps_each_service_to_a_provider(self):
+        openclaw_output = self.root / "models.json"
+        result = self.discover(openclaw_output=openclaw_output)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        fragment = json.loads(openclaw_output.read_text())
+        self.assertEqual(fragment["primary"], "redhat-code-model/served-model")
+        provider = fragment["providers"]["redhat-code-model"]
+        self.assertEqual(
+            provider["baseUrl"],
+            "https://isvc-code-model-predictor.test-models.svc.cluster.local:8443/v1",
+        )
+        self.assertEqual(provider["api"], "openai-completions")
+        self.assertEqual(provider["apiKey"], {"source": "file", "provider": "kserve-sa", "id": "value"})
+        self.assertEqual(provider["models"], [{
+            "id": "served-model",
+            "name": "Code Model",
+            "contextWindow": 32768,
+            "maxTokens": 8192,
+        }])
+        self.assertNotIn("test-service-token", openclaw_output.read_text())
+        self.assertEqual(openclaw_output.stat().st_mode & 0o777, 0o600)
 
     def test_cluster_error_preserves_both_configs(self):
         vscode_output = self.root / "chatLanguageModels.json"

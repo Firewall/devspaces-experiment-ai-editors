@@ -1,0 +1,50 @@
+schemaVersion: 2.2.2
+
+metadata:
+  name: openclaw/openclaw-editor/latest
+  displayName: OpenClaw
+  description: Self-hosted agent gateway with a browser Control UI, chat, and terminal
+  attributes:
+    publisher: openclaw
+    version: latest
+    title: OpenClaw — agent workspace on Red Hat AI
+    firstPublicationDate: '2026-10-30'
+    repository: https://github.com/openclaw/openclaw
+
+components:
+  - name: openclaw-runtime
+    container:
+      image: ${OPENCLAW_IMAGE}
+      mountSources: true
+      sourceMapping: /projects
+      env:
+        - name: OPENCLAW_PUBLIC_ORIGIN
+          value: "${OPENCLAW_PUBLIC_ORIGIN}"
+        - name: OPENCLAW_TRUSTED_PROXIES
+          value: "${OPENCLAW_TRUSTED_PROXIES}"
+        - name: OPENCLAW_GATEWAY_TOKEN
+          value: "${OPENCLAW_GATEWAY_TOKEN}"
+        - name: REDHAT_AI_NAMESPACE
+          value: "${REDHAT_AI_NAMESPACE}"
+      command:
+        - /bin/bash
+        - -c
+        - /usr/local/bin/openclaw-entrypoint.sh 2>&1 | tee /tmp/openclaw-logs.txt
+      memoryLimit: 4096Mi
+      memoryRequest: 1024Mi
+      cpuLimit: 2000m
+      cpuRequest: 200m
+      endpoints:
+        - name: openclaw
+          targetPort: 18789
+          exposure: public
+          protocol: https
+          secure: true
+          attributes:
+            type: main
+            cookiesAuthEnabled: true
+            discoverable: false
+            urlRewriteSupported: true
+    attributes:
+      app.kubernetes.io/component: openclaw-runtime
+      app.kubernetes.io/part-of: openclaw

@@ -22,6 +22,11 @@ VSCODE_DIR = vs-code-agent-host
 VSCODE_CONFIGMAP ?= vs-code-agent-host-editor-definition
 VSCODE_DEVFILE = $(VSCODE_DIR)/devfile.yaml
 
+# ---- OpenClaw ----
+OPENCLAW_DIR = openclaw
+OPENCLAW_CONFIGMAP ?= openclaw-editor-definition
+OPENCLAW_DEVFILE = $(OPENCLAW_DIR)/devfile.yaml
+
 BOB_DIR = bob
 BOB_CONFIGMAP ?= bob-editor-definition
 BOB_DEVFILE = $(BOB_DIR)/devfile.yaml
@@ -32,6 +37,8 @@ BOB_DEVFILE = $(BOB_DIR)/devfile.yaml
         orca-deploy orca-teardown \
         vscode-build vscode-push vscode-deploy vscode-test vscode-teardown \
         vscode-register vscode-unregister vscode-devfile \
+        openclaw-build openclaw-push openclaw-deploy openclaw-teardown \
+        openclaw-register openclaw-unregister openclaw-devfile \
         bob-build bob-push bob-deploy bob-test bob-teardown bob-register bob-unregister bob-devfile
 
 check-namespace:
@@ -143,6 +150,35 @@ vscode-teardown:
 
 vscode-unregister: check-namespace
 	oc delete configmap $(VSCODE_CONFIGMAP) -n $(NAMESPACE)
+
+# === OpenClaw targets ===
+openclaw-build:
+	podman build --platform linux/amd64 -f $(OPENCLAW_DIR)/Containerfile -t $(OPENCLAW_IMAGE) .
+
+openclaw-push:
+	podman push $(OPENCLAW_IMAGE)
+
+openclaw-devfile:
+	python3 shared/render-devfile.py "$(OPENCLAW_DEVFILE)" --output "$(OPENCLAW_DIR)/devfile-rendered.yaml"
+
+openclaw-register: check-namespace openclaw-devfile
+	oc create configmap $(OPENCLAW_CONFIGMAP) \
+	  --from-file=$(OPENCLAW_DIR)/devfile-rendered.yaml \
+	  -n $(NAMESPACE)
+	oc label configmap $(OPENCLAW_CONFIGMAP) \
+	  app.kubernetes.io/part-of=che.eclipse.org \
+	  app.kubernetes.io/component=editor-definition \
+	  -n $(NAMESPACE)
+	@rm -f $(OPENCLAW_DIR)/devfile-rendered.yaml
+
+openclaw-unregister: check-namespace
+	oc delete configmap $(OPENCLAW_CONFIGMAP) -n $(NAMESPACE)
+
+openclaw-deploy:
+	$(OPENCLAW_DIR)/deploy.sh
+
+openclaw-teardown:
+	$(OPENCLAW_DIR)/teardown.sh
 
 # === IBM Bob PoC targets ===
 bob-build:

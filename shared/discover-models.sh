@@ -1,5 +1,5 @@
 #!/bin/bash
-# Discovers KServe models for OpenCode and an optional VS Code output file.
+# Discovers KServe models for OpenCode plus optional VS Code and OpenClaw outputs.
 
 umask 077
 
@@ -7,6 +7,7 @@ NS="${REDHAT_AI_NAMESPACE:-}"
 OUT="${1:-${PROJECTS_ROOT:-/projects}/opencode.json}"
 PROFILE="${2:-backend}"
 VSCODE_OUT="${3:-}"
+OPENCLAW_OUT="${4:-}"
 case "$PROFILE" in
   backend|agent) ;;
   *) echo "discover-models: profile must be backend or agent" >&2; exit 1 ;;
@@ -43,12 +44,14 @@ PROBES+="]"
 [ "$PROBES" = "[]" ] && { echo "discover-models: no reachable models"; exit 0; }
 
 PROBES="$PROBES" DISCOVERY_PROFILE="$PROFILE" VSCODE_API_KEY="${VSCODE_OUT:+$TOKEN}" \
-  node - "$OUT" "$VSCODE_OUT" <<'EOF'
+  node - "$OUT" "$VSCODE_OUT" "$OPENCLAW_OUT" <<'EOF'
 const fs = require('fs');
 const data = JSON.parse(process.env.PROBES);
 const models = {};
 const vscodeModels = [];
+const openclawProviders = {};
 let first = null;
+let openclawPrimary = null;
 
 for (const { isvc, url, resp } of data) {
   const m = resp.data && resp.data[0];
@@ -82,6 +85,23 @@ for (const { isvc, url, resp } of data) {
     maxInputTokens: models[key].limit.context,
     maxOutputTokens: models[key].limit.output,
   });
+
+  // OpenClaw addresses one base URL per provider, so each InferenceService
+  // becomes its own provider. The credential is a file SecretRef so the
+  // gateway can pick up rotated service account tokens without a restart.
+  const providerId = `redhat-${key}`;
+  openclawProviders[providerId] = {
+    baseUrl: url,
+    api: 'openai-completions',
+    apiKey: { source: 'file', provider: 'kserve-sa', id: 'value' },
+    models: [{
+      id: m.id,
+      name: label,
+      contextWindow: models[key].limit.context,
+      maxTokens: models[key].limit.output,
+    }],
+  };
+  if (!openclawPrimary) openclawPrimary = `${providerId}/${m.id}`;
 }
 
 if (!first) process.exit(0);
@@ -131,5 +151,14 @@ if (vscodeOut) {
   fs.writeFileSync(vscodeOut, JSON.stringify(vscodeConfig, null, 2) + '\n', { mode: 0o600 });
   fs.chmodSync(vscodeOut, 0o600);
   console.error(`discover-models: wrote ${vscodeModels.length} model(s) to ${vscodeOut}`);
+}
+
+const openclawOut = process.argv[4];
+if (openclawOut) {
+  const fragment = { primary: openclawPrimary, providers: openclawProviders };
+  if (fs.existsSync(openclawOut)) fs.chmodSync(openclawOut, 0o600);
+  fs.writeFileSync(openclawOut, JSON.stringify(fragment, null, 2) + '\n', { mode: 0o600 });
+  fs.chmodSync(openclawOut, 0o600);
+  console.error(`discover-models: wrote ${Object.keys(openclawProviders).length} provider(s) to ${openclawOut}`);
 }
 EOF

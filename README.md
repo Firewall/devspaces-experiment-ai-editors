@@ -1,6 +1,6 @@
 # AI editors for OpenShift Dev Spaces
 
-Run T3 Code, OpenChamber, Orca, or VS Code Agent Host in OpenShift Dev Spaces workspaces. This repository contains container recipes, devfiles, and scripts that build an image and create a workspace in your user namespace.
+Run T3 Code, OpenChamber, Orca, OpenClaw, or VS Code Agent Host in OpenShift Dev Spaces workspaces. This repository contains container recipes, devfiles, and scripts that build an image and create a workspace in your user namespace.
 
 A [Headless Bob proof of concept](bob/README.md) adds a browser console with a shared repository. Select OpenCode with a free model or IBM Bob Shell with a Bob subscription. Start with `./bob/deploy.sh` after setting `BOB_IMAGE` and `BOB_BACKEND` in `config.env`.
 
@@ -11,6 +11,7 @@ This is an experiment. Direct OpenShift Routes work around Che gateway routing l
 | [T3 Code](https://github.com/pingdotgg/t3code) | OpenCode with optional KServe model discovery | 3773 | Pairing token | Browser |
 | [OpenChamber](https://github.com/openchamber/openchamber) | OpenCode providers, including KServe | 3000 | UI password | Browser |
 | [Orca](https://github.com/stablyai/orca) | OpenCode with KServe model discovery | 6768 | Browser pairing URL | Browser |
+| [OpenClaw](https://github.com/openclaw/openclaw) | KServe model discovery or any OpenClaw provider | 18789 | Gateway token | Browser |
 | [VS Code Agent Host](https://code.visualstudio.com/) | Discovered KServe models and OpenCode | 3773 | Connection token | Compatible VS Code client |
 
 VS Code Agent Host exposes an agent service. Its URL is a service endpoint for a compatible client, rather than a browser IDE.
@@ -48,6 +49,7 @@ NAMESPACE=rh-ee-yourname-dev
 T3_IMAGE=quay.io/my-org/devspaces-t3-code-editor:latest
 OPENCHAMBER_IMAGE=quay.io/my-org/devspaces-openchamber-editor:latest
 ORCA_IMAGE=quay.io/my-org/devspaces-orca-editor:latest
+OPENCLAW_IMAGE=quay.io/my-org/devspaces-openclaw-editor:latest
 AGENT_HOST_IMAGE=quay.io/my-org/devspaces-vs-code-agent-host:latest
 ```
 
@@ -66,12 +68,16 @@ Run the script for your chosen editor from the repository root:
 # or
 ./orca/deploy.sh
 # or
+./openclaw/deploy.sh
+# or
 ./vs-code-agent-host/deploy.sh
 ```
 
 Each script builds and pushes a `linux/amd64` image, creates an editor template and workspace, waits for the pod, and creates a direct HTTPS Route. It then prints the connection URL and credential. Keep that output private.
 
-Orca creates its Route before starting the workspace so its pairing URL advertises the external WebSocket address. The other integrations create the Route after the pod starts.
+Orca creates its Route before starting the workspace so its pairing URL advertises the external WebSocket address. OpenClaw does the same so its gateway can allowlist the public origin. The other integrations create the Route after the pod starts.
+
+For OpenClaw, open the printed URL, paste the gateway token into the Control UI, and pick a model in Settings. The Control UI provides chat, an operator terminal in `/projects`, and file browsing. The dashboard Open button may not work; use the printed URL.
 
 The workspace initially has no source repository. Add or clone your code under `/projects` after connecting. Each integration uses fixed workspace and resource names, so rerunning its script updates the same resources in the configured namespace.
 
@@ -96,6 +102,7 @@ To retrieve a credential later, find the workspace pod and read the file for you
 | T3 Code | `t3-code-workspace` | `t3-code-runtime` | `/projects/.devspaces-t3code/pairing-token.txt` |
 | OpenChamber | `openchamber-workspace` | `openchamber-runtime` | `/projects/.devspaces-openchamber/ui-password.txt` |
 | Orca | `orca-workspace` | `orca-runtime` | `/projects/.devspaces-orca/ready.jsonl` |
+| OpenClaw | `openclaw-workspace` | `openclaw-runtime` | `/projects/.devspaces-openclaw/gateway-token` |
 | VS Code Agent Host | `vs-code-agent-host-workspace` | `vs-code-agent-host` | `/projects/.devspaces-agent-host/connection-token` |
 
 For example, to retrieve the T3 Code token:
@@ -109,7 +116,7 @@ oc exec "$POD" -c t3-code-runtime -n "$NAMESPACE" -- \
   cat /projects/.devspaces-t3code/pairing-token.txt
 ```
 
-For Orca, use the full `pairing.webClientUrl` in its readiness JSON, including the fragment. Treat that URL as a credential. T3 Code creates a pairing token with a 30-day lifetime; an expired, unused token needs to be recreated.
+For Orca, use the full `pairing.webClientUrl` in its readiness JSON, including the fragment. Treat that URL as a credential. The OpenClaw gateway token grants full operator access to that workspace, including its terminal. T3 Code creates a pairing token with a 30-day lifetime; an expired, unused token needs to be recreated.
 
 Keep passwords, pairing URLs, logs, and generated model configuration out of issues and pull requests. VS Code's `chatLanguageModels.json` contains a service account token and is written with mode `600`.
 
@@ -123,6 +130,8 @@ For any integration, set `REDHAT_AI_NAMESPACE` in `config.env` before running it
 
 Discovery skips missing or unreachable services. If your cluster has no shared models, configure an OpenCode provider yourself. T3 Code, OpenChamber, and VS Code Agent Host generate a config that disables OpenCode's own tools for use as an editor backend. Orca keeps OpenCode's default tools and permissions.
 
+OpenClaw does not use OpenCode. Discovery writes one OpenClaw provider per InferenceService (`redhat-<model>`) into `/projects/.devspaces-openclaw/models.json`, and startup merges those providers into `/projects/.devspaces-openclaw/openclaw.json`. Model calls read the service account token from a private copy at `/projects/.devspaces-openclaw/kserve-token`, which refreshes as the cluster rotates it. A model you pick in the Control UI is kept, and every restart reruns discovery. Delete `openclaw.json` to reseed it from scratch. Configure other providers in Settings or with `openclaw config set`.
+
 In Orca, open a terminal in your repository, run `opencode`, and select a Red Hat AI model with `/models`. Orca sets `OPENCODE_CONFIG` to the generated `/projects/opencode.json`, so discovery also works inside cloned repositories and worktrees. OpenCode merges that config with your user and project settings.
 
 ### Other providers
@@ -135,7 +144,7 @@ For Google Vertex AI, set the project and region required by your provider confi
 gcloud auth application-default login --no-launch-browser
 ```
 
-OpenChamber and Orca persist OpenCode and Google Cloud state on `/projects`. T3 Code persists its editor state and Google Cloud state. VS Code Agent Host persists its server state and Google Cloud state. Other coding agent CLIs can be installed and authenticated in the workspace terminal.
+OpenChamber and Orca persist OpenCode and Google Cloud state on `/projects`. T3 Code persists its editor state and Google Cloud state. VS Code Agent Host persists its server state and Google Cloud state. OpenClaw persists its config, gateway token, and SQLite state in `/projects/.devspaces-openclaw`. Other coding agent CLIs can be installed and authenticated in the workspace terminal.
 
 ## Remove a deployment
 
@@ -147,6 +156,8 @@ Use the matching teardown script:
 ./openchamber/teardown.sh
 # or
 ./orca/teardown.sh
+# or
+./openclaw/teardown.sh
 # or
 ./vs-code-agent-host/teardown.sh
 ```
@@ -161,16 +172,19 @@ The deploy scripts create templates in your namespace. To add editor definitions
 make t3-register
 make chamber-register
 make orca-register
+make openclaw-register
 make vscode-register
 ```
 
-Remove definitions with the matching `*-unregister` target. For manual Orca registration, also set `ORCA_PAIRING_ADDRESS` to a reachable `wss://` endpoint. Its deploy script calculates that address automatically. Restore your user namespace in `config.env` before deploying or tearing down a workspace.
+Remove definitions with the matching `*-unregister` target. For manual Orca registration, also set `ORCA_PAIRING_ADDRESS` to a reachable `wss://` endpoint. Its deploy script calculates that address automatically. For manual OpenClaw registration, set `OPENCLAW_PUBLIC_ORIGIN` to the `https://` Route host; its deploy script also calculates that value. Restore your user namespace in `config.env` before deploying or tearing down a workspace.
 
 ## Versions and limitations
 
-The Containerfiles pin T3 Code, OpenChamber, OpenCode, and Orca to explicit versions. T3 Code currently uses a dated nightly release. Update the version declarations when testing a newer release. Base images, Google Cloud SDK downloads, the OpenShift CLI, and the VS Code stable CLI still follow moving releases, so builds are not fully reproducible.
+The Containerfiles pin T3 Code, OpenChamber, OpenCode, Orca, and OpenClaw to explicit versions. T3 Code currently uses a dated nightly release. Update the version declarations when testing a newer release. Base images, Google Cloud SDK downloads, the OpenShift CLI, and the VS Code stable CLI still follow moving releases, so builds are not fully reproducible.
 
 Images target `linux/amd64`. On ARM machines, most stages need emulation. Orca builds on the host architecture and packages an amd64 runtime to avoid esbuild failures under emulation. Orca v1.4.219 needs [web-client.patch](orca/web-client.patch) to serve its web client and initialize terminal creation.
+
+OpenClaw needs Node 24.22 or newer, which the universal developer image does not provide. It therefore builds on the upstream OpenClaw image instead of using the injector pattern. OpenClaw also rejects proxied requests unless the proxy source is trusted, so the devfile sets `gateway.trustedProxies` from `OPENCLAW_TRUSTED_PROXIES`. The defaults cover private ranges; if the Control UI returns `proxy_attribution_required`, narrow that list to your router or node addresses. Scheduled jobs are off by default because a stopped workspace would replay every missed run on restart; enable them with `openclaw config set cron.enabled true`. Its SQLite state needs a local filesystem, so avoid NFS, SMB, or CIFS-backed workspace storage. The direct Route uses a one-hour proxy timeout for long agent turns.
 
 T3 Code and OpenChamber assets use absolute paths that break under Che gateway subpaths. The direct Routes work around this, but the dashboard Open button may still lack an IDE URL. Use the URL printed by the deploy script. See [T3 Code's routing issue](https://github.com/pingdotgg/t3code/issues/2310).
 
@@ -180,7 +194,7 @@ OpenChamber includes a Red Hat Dark theme. Load it through Settings, Theme, Relo
 
 ## Repository layout
 
-Each editor directory contains its `Containerfile`, `devfile.yaml`, `deploy.sh`, `teardown.sh`, and startup scripts. T3 Code, OpenChamber, and Orca inject their runtime into a universal developer image. VS Code Agent Host runs its own image directly.
+Each editor directory contains its `Containerfile`, `devfile.yaml`, `deploy.sh`, `teardown.sh`, and startup scripts. T3 Code, OpenChamber, and Orca inject their runtime into a universal developer image. OpenClaw and VS Code Agent Host run their own images directly.
 
 Each `devfile.yaml` defines the editor components, commands, and events. Deployment and admin registration use the same renderer, so changes to those definitions belong in the devfile. The renderer substitutes configuration values and preserves runtime variables such as `$PATH`.
 
@@ -192,6 +206,6 @@ Run the local discovery and editor-script checks with `python3 -m unittest disco
 
 ## License
 
-The integration code is licensed under [MIT](LICENSE). [T3 Code](https://github.com/pingdotgg/t3code), [OpenChamber](https://github.com/openchamber/openchamber), [Orca](https://github.com/stablyai/orca), [OpenCode](https://github.com/anomalyco/opencode), and their dependencies keep their own licenses. Preserve upstream license files and notices when redistributing images.
+The integration code is licensed under [MIT](LICENSE). [T3 Code](https://github.com/pingdotgg/t3code), [OpenChamber](https://github.com/openchamber/openchamber), [Orca](https://github.com/stablyai/orca), [OpenClaw](https://github.com/openclaw/openclaw), [OpenCode](https://github.com/anomalyco/opencode), and their dependencies keep their own licenses. Preserve upstream license files and notices when redistributing images.
 
 The Orca integration applies a small patch and includes its [upstream license](https://github.com/stablyai/orca/blob/v1.4.219/LICENSE) in the runtime image. VS Code binaries have separate [Microsoft product](https://code.visualstudio.com/license) and [server terms](https://code.visualstudio.com/license/server); review those before distributing an image or offering a hosted service.
