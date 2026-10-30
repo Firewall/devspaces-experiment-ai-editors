@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/nodejs-22 AS builder
+FROM registry.access.redhat.com/ubi9/nodejs-24 AS builder
 
 USER 0
 
@@ -9,8 +9,11 @@ RUN ARCH=$(uname -m) && \
     curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
       | tar -xz -C /usr/lib
 
-ARG T3_VERSION=0.0.46-nightly.20261003.2610
-ARG OPENCODE_VERSION=1.18.34
+# The t3 npm package installs a launcher; the self-contained runtime is downloaded
+# into T3CODE_HOME on first start (see t3-code/entrypoint.sh).
+# Switch T3_VERSION to a `nightly` tag such as 0.1.6-nightly.20261030.3917 to track nightlies.
+ARG T3_VERSION=0.1.5
+ARG OPENCODE_VERSION=1.19.5
 RUN npm install -g "t3@${T3_VERSION}" "opencode-ai@${OPENCODE_VERSION}"
 
 COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
