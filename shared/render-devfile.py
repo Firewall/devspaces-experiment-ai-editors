@@ -13,7 +13,7 @@ except ImportError:
     sys.exit("Install the devfile renderer dependency with: python3 -m pip install -r requirements.txt")
 
 
-IMAGE_VARIABLES = {"T3_IMAGE", "OPENCHAMBER_IMAGE", "ORCA_IMAGE", "AGENT_HOST_IMAGE", "BOB_IMAGE"}
+IMAGE_VARIABLES = {"T3_IMAGE", "OPENCHAMBER_IMAGE", "ORCA_IMAGE", "AGENT_HOST_IMAGE", "BOB_IMAGE", "OPENCLAW_IMAGE"}
 DEFAULTS = {
     "GOOGLE_CLOUD_PROJECT": "",
     "CLOUD_ML_REGION": "",
@@ -21,6 +21,12 @@ DEFAULTS = {
     "ORCA_PAIRING_ADDRESS": "",
     "REDHAT_AI_NAMESPACE": "",
     "BOB_OPENCODE_MODEL": "opencode/glm-5.3-flash-free",
+    # OpenClaw rejects proxied requests unless the proxy source is trusted.
+    # Private ranges cover cluster networks and host-network routers; narrow this
+    # in config.env when your router uses a fixed address.
+    "OPENCLAW_TRUSTED_PROXIES": "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
+    "OPENCLAW_PUBLIC_ORIGIN": "",
+    "OPENCLAW_GATEWAY_TOKEN": "",
 }
 PLACEHOLDER = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
 

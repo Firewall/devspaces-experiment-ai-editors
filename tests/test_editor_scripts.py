@@ -18,6 +18,7 @@ EDITORS = {
     "openchamber": ("openchamber-direct", 3000, "180s"),
     "orca": ("orca-direct", 6768, "180s"),
     "vs-code-agent-host": ("agent-host-direct", 3773, "300s"),
+    "openclaw": ("openclaw-direct", 18789, "300s"),
 }
 
 
@@ -51,6 +52,7 @@ class EditorScriptTests(unittest.TestCase):
             "OPENCHAMBER_IMAGE=localhost/test-chamber\n"
             "ORCA_IMAGE=localhost/test-orca\n"
             "AGENT_HOST_IMAGE=localhost/test-vscode\n"
+            "OPENCLAW_IMAGE=localhost/test-openclaw\n"
             "BOB_IMAGE=localhost/test-bob\n"
             "GOOGLE_CLOUD_PROJECT=test-project\n"
             "CLOUD_ML_REGION=test-region\n"
@@ -176,10 +178,15 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 runtime = next(component for component in components
                                if component["name"] == (editor if editor == "vs-code-agent-host" else f"{editor}-runtime"))
                 self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": "test-models"}, runtime["container"]["env"])
-                if editor == "orca":
+                if editor in ("orca", "openclaw"):
+                    # Both create the Route first: Orca needs its pairing address,
+                    # OpenClaw needs its public origin.
                     self.assertIs(manifests[0], direct_route)
-                    self.assertIn("wss://editor.test.example/", template)
-                    self.assertIn("controller.devfile.io/devworkspace_name: orca-workspace", direct_route)
+                    self.assertIn(f"controller.devfile.io/devworkspace_name: {editor}-workspace", direct_route)
+                    if editor == "orca":
+                        self.assertIn("wss://editor.test.example/", template)
+                    else:
+                        self.assertIn("https://editor.test.example", template)
                 else:
                     self.assertIs(manifests[-1], direct_route)
                     self.assertIn("controller.devfile.io/devworkspace_id: workspace-id", direct_route)
@@ -277,7 +284,8 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                     self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": ""}, runtime["container"]["env"])
 
     def register_devfile(self, editor):
-        prefix = {"t3-code": "t3", "openchamber": "chamber", "orca": "orca", "vs-code-agent-host": "vscode"}[editor]
+        prefix = {"t3-code": "t3", "openchamber": "chamber", "orca": "orca",
+                  "vs-code-agent-host": "vscode", "openclaw": "openclaw"}[editor]
         result = subprocess.run(
             ["make", f"{prefix}-devfile"], cwd=self.root, env=self.env,
             capture_output=True, text=True, timeout=15,
@@ -292,6 +300,7 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
         config.write_text(config.read_text().replace("REDHAT_AI_NAMESPACE=test-models\n", ""))
         self.env.pop("REDHAT_AI_NAMESPACE", None)
         self.env["ORCA_PAIRING_ADDRESS"] = "wss://editor.test.example/"
+        self.env["OPENCLAW_PUBLIC_ORIGIN"] = "https://editor.test.example"
         for editor in EDITORS:
             with self.subTest(editor=editor):
                 result, commands = self.run_script(editor, "deploy.sh")
@@ -492,3 +501,87 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
         self.assertEqual(result.stdout.strip(), "yes")
         self.assertEqual(len((home / ".bashrc").read_text().splitlines()), 1)
         self.assertEqual((home / ".bashrc").stat().st_mode & 0o777, 0o600)
+
+    def seed_openclaw_config(self, config, fragment, origin="https://openclaw.test.example",
+                             proxies="10.0.0.0/8, 172.16.0.0/12", token_file=None):
+        return subprocess.run(
+            ["bash", str(REPO / "openclaw/seed-config.sh"), str(config),
+             str(fragment) if fragment else "", origin, proxies, "/projects",
+             str(token_file) if token_file else ""],
+            env=self.env, capture_output=True, text=True, timeout=15,
+        )
+
+    def test_openclaw_config_seed_sets_gateway_defaults_and_models(self):
+        config = self.root / "openclaw.json"
+        fragment = self.root / "models.json"
+        token_file = self.root / "kserve-token"
+        fragment.write_text(json.dumps({
+            "primary": "redhat-code-model/served-model",
+            "providers": {"redhat-code-model": {
+                "baseUrl": "https://isvc-code-model-predictor.models.svc.cluster.local:8443/v1",
+                "api": "openai-completions",
+                "apiKey": {"source": "file", "provider": "kserve-sa", "id": "value"},
+                "models": [{"id": "served-model", "name": "Code Model", "contextWindow": 32768}],
+            }},
+        }))
+        result = self.seed_openclaw_config(config, fragment, token_file=token_file)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        seeded = json.loads(config.read_text())
+        self.assertEqual(seeded["gateway"]["mode"], "local")
+        self.assertEqual(seeded["gateway"]["bind"], "lan")
+        self.assertEqual(seeded["gateway"]["port"], 18789)
+        self.assertEqual(seeded["gateway"]["auth"]["mode"], "token")
+        self.assertEqual(seeded["gateway"]["publicOrigin"], "https://openclaw.test.example")
+        self.assertEqual(seeded["gateway"]["trustedProxies"], ["10.0.0.0/8", "172.16.0.0/12"])
+        self.assertTrue(seeded["gateway"]["controlUi"]["enabled"])
+        self.assertEqual(seeded["agents"]["defaults"]["workspace"], "/projects")
+        self.assertEqual(seeded["agents"]["defaults"]["model"]["primary"], "redhat-code-model/served-model")
+        self.assertEqual(seeded["cron"], {"enabled": False})
+        self.assertEqual(seeded["secrets"]["providers"]["kserve-sa"], {
+            "source": "file", "path": str(token_file), "mode": "singleValue",
+        })
+        provider = seeded["models"]["providers"]["redhat-code-model"]
+        self.assertEqual(provider["api"], "openai-completions")
+        self.assertEqual(provider["apiKey"], {"source": "file", "provider": "kserve-sa", "id": "value"})
+        self.assertEqual(provider["models"][0]["contextWindow"], 32768)
+        self.assertNotIn("test-service-token", config.read_text())
+        self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+
+    def test_openclaw_config_seed_preserves_control_ui_edits_and_model_choice(self):
+        config = self.root / "openclaw.json"
+        fragment = self.root / "models.json"
+        fragment.write_text(json.dumps({
+            "primary": "redhat-new/new-model",
+            "providers": {"redhat-new": {"baseUrl": "https://new/v1", "models": [{"id": "new-model"}]}},
+        }))
+        config.write_text(json.dumps({
+            "uiNote": "keep me",
+            "gateway": {"auth": {"mode": "password"}, "controlUi": {"theme": "custom"}},
+            "agents": {"defaults": {"model": {"primary": "manual/choice"}}},
+        }))
+        result = self.seed_openclaw_config(config, fragment)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        seeded = json.loads(config.read_text())
+        self.assertEqual(seeded["uiNote"], "keep me")
+        self.assertEqual(seeded["gateway"]["auth"]["mode"], "password")
+        self.assertEqual(seeded["gateway"]["controlUi"]["theme"], "custom")
+        self.assertTrue(seeded["gateway"]["controlUi"]["enabled"])
+        self.assertEqual(seeded["agents"]["defaults"]["model"]["primary"], "manual/choice")
+        self.assertIn("redhat-new", seeded["models"]["providers"])
+        self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+
+    def test_openclaw_config_seed_refuses_invalid_json(self):
+        config = self.root / "openclaw.json"
+        config.write_text("{ not json\n")
+        result = self.seed_openclaw_config(config, None)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(config.read_text(), "{ not json\n")
+        self.assertIn("not valid JSON", result.stderr)
+
+    def test_editor_scripts_are_executable(self):
+        for editor in [*EDITORS, "bob"]:
+            for name in ("deploy.sh", "teardown.sh"):
+                with self.subTest(editor=editor, script=name):
+                    path = REPO / editor / name
+                    self.assertTrue(path.is_file(), f"{path} is missing")
+                    self.assertTrue(os.access(path, os.X_OK), f"{path} is not executable")
