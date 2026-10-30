@@ -1,0 +1,109 @@
+name: Build images
+
+# Build the editor images on main and on pull requests. Only main pushes the
+# result to the registry; pull requests build to catch breakage before merge.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-images-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: ${{ matrix.editor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - editor: t3-code
+            image: devspaces-t3-code-editor
+            containerfile: t3-code/Containerfile
+          - editor: openchamber
+            image: devspaces-openchamber-editor
+            containerfile: openchamber/Containerfile
+          - editor: orca
+            image: devspaces-orca-editor
+            containerfile: orca/Containerfile
+          - editor: openclaw
+            image: devspaces-openclaw-editor
+            containerfile: openclaw/Containerfile
+          - editor: vs-code-agent-host
+            image: devspaces-vs-code-agent-host
+            containerfile: vs-code-agent-host/Containerfile
+    env:
+      REGISTRY: quay.io
+      PUSH: ${{ github.event_name == 'pull_request' && 'false' || 'true' }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set image metadata
+        id: meta
+        env:
+          QUAY_NAMESPACE: ${{ vars.QUAY_NAMESPACE || github.repository_owner }}
+          IMAGE_NAME: ${{ matrix.image }}
+        run: |
+          namespace=$(printf '%s' "$QUAY_NAMESPACE" | tr '[:upper:]' '[:lower:]')
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          echo "image=${REGISTRY}/${namespace}/${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Check registry credentials
+        if: env.PUSH == 'true'
+        env:
+          QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+          QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+        run: |
+          if [ -z "$QUAY_USERNAME" ] || [ -z "$QUAY_TOKEN" ]; then
+            echo "::error::Set the QUAY_USERNAME and QUAY_TOKEN repository secrets before pushing images."
+            exit 1
+          fi
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the registry
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.QUAY_USERNAME }}
+          password: ${{ secrets.QUAY_TOKEN }}
+
+      - name: Build ${{ matrix.editor }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.containerfile }}
+          platforms: linux/amd64
+          push: ${{ env.PUSH }}
+          # Single manifest, matching the podman builds this workflow replaces.
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ steps.meta.outputs.image }}:latest
+            ${{ steps.meta.outputs.image }}:sha-${{ steps.meta.outputs.short_sha }}
+          cache-from: type=gha,scope=${{ matrix.editor }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.editor }}
+
+      - name: Summarize
+        run: |
+          {
+            echo "### ${{ matrix.editor }}"
+            echo
+            echo "- Containerfile: \`${{ matrix.containerfile }}\`"
+            echo "- Pushed: \`${{ env.PUSH }}\`"
+            if [ "${{ env.PUSH }}" = "true" ]; then
+              echo "- \`${{ steps.meta.outputs.image }}:latest\`"
+              echo "- \`${{ steps.meta.outputs.image }}:sha-${{ steps.meta.outputs.short_sha }}\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
