@@ -89,6 +89,32 @@ For VS Code Agent Host, check a running deployment with:
 
 The test checks the pod, CLI, model files, token, bubblewrap, service, and Route. Bubblewrap depends on the cluster allowing user namespaces; a failed check means you should not assume sandboxing works.
 
+## CI builds
+
+[`.github/workflows/build-images.yaml`](.github/workflows/build-images.yaml) builds the five editor images for `linux/amd64` on a pull request and on every push to `main`. Runs are independent per image, so a failure in one does not stop the others, and BuildKit caches layers in the GitHub Actions cache.
+
+Pull requests build only, which verifies the Containerfiles without publishing unreviewed code. Pushes to `main` also push two tags to Quay, using the Quay namespace instead of `myorg`:
+
+```text
+quay.io/myorg/devspaces-t3-code-editor:latest
+quay.io/myorg/devspaces-t3-code-editor:sha-<commit>
+```
+
+Images follow the same names as `config.env.example`: `devspaces-t3-code-editor`, `devspaces-openchamber-editor`, `devspaces-orca-editor`, `devspaces-openclaw-editor`, and `devspaces-vs-code-agent-host`.
+
+Add these repository secrets under Settings, Secrets and variables, Actions:
+
+| Name | Value |
+| --- | --- |
+| `QUAY_USERNAME` | Quay robot account name, for example `myorg+ci` |
+| `QUAY_TOKEN` | Token for that robot account with write access |
+
+The robot account needs permission to create repositories, or you must create the five repositories before the first push. Optionally set a repository variable `QUAY_NAMESPACE` when the Quay namespace differs from the repository owner; the workflow defaults to the owner, lowercased.
+
+Start the workflow manually from the Actions tab to build without a new commit. The Headless Bob image stays a local build because it bundles IBM Bob Shell under IBM's separate terms; see [bob/README.md](bob/README.md).
+
+Deployments still build and push their own image, so point `config.env` at the published tags when you want the CI-built image, for example `T3_IMAGE=quay.io/myorg/devspaces-t3-code-editor:latest`. Set `NAMESPACE` as usual.
+
 ## Credentials and access
 
 Direct Routes bypass the Che gateway. Access depends on the editor's own password, pairing, or connection token. The Routes terminate TLS and redirect HTTP to HTTPS.
