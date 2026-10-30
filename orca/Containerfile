@@ -45,7 +45,7 @@ RUN ARCH=$(uname -m) && \
       | tar -xz -C /usr/lib
 
 # Keep installer-created state out of the image so the entrypoint can link it to /projects.
-ARG OPENCODE_VERSION=1.18.34
+ARG OPENCODE_VERSION=1.19.5
 RUN npm install -g "opencode-ai@${OPENCODE_VERSION}" && \
     rm -rf /opt/app-root/src/.config/opencode \
            /opt/app-root/src/.local/share/opencode \
