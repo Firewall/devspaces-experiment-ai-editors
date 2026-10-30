@@ -1,4 +1,4 @@
-FROM registry.access.redhat.com/ubi9/nodejs-22 AS builder
+FROM registry.access.redhat.com/ubi9/nodejs-24 AS builder
 
 USER 0
 
@@ -9,9 +9,18 @@ RUN ARCH=$(uname -m) && \
     curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
       | tar -xz -C /usr/lib
 
-ARG OPENCHAMBER_VERSION=2.1.0
-ARG OPENCODE_VERSION=1.18.34
-RUN npm install -g "@openchamber/web@${OPENCHAMBER_VERSION}" "opencode-ai@${OPENCODE_VERSION}"
+# OpenChamber 2.x drives the OpenCode 2.x CLI and rejects the legacy 1.x
+# opencode-ai package, so install @opencode/cli, which ships the same
+# `opencode` binary from a per-platform package. Its postinstall links that
+# binary over bin/opencode.exe, so run it explicitly instead of depending on
+# npm's lifecycle-script policy. 2.5.3 declares engines >= 24.14 and runs on
+# the image's Node.js 22.
+ARG OPENCHAMBER_VERSION=2.5.3
+ARG OPENCODE_VERSION=2.2.4
+RUN npm install -g --ignore-scripts \
+      "@openchamber/web@${OPENCHAMBER_VERSION}" "@opencode/cli@${OPENCODE_VERSION}" && \
+    node "$(npm root -g)/@opencode/cli/postinstall.mjs" && \
+    opencode --version
 
 COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
 COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh

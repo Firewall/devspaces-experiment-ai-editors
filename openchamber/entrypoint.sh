@@ -58,16 +58,10 @@ echo ""
 WORKDIR="${PROJECTS_ROOT:-/projects}"
 cd "$WORKDIR" || exit 1
 
-# Pre-seed OpenCode config so it defaults to /projects/ as the workspace root
-OPENCODE_CFG="$HOME/.config/opencode/config.json"
-if [ ! -f "$OPENCODE_CFG" ]; then
-  mkdir -p "$(dirname "$OPENCODE_CFG")"
-  cat > "$OPENCODE_CFG" <<EOCFG
-{
-  "cwd": "$WORKDIR"
-}
-EOCFG
-fi
+# Default OpenChamber's managed OpenCode server to /projects/ as the workspace
+# root. OpenCode 2.x dropped the "cwd" config key, so OpenChamber takes it from
+# this environment variable instead.
+export OPENCHAMBER_OPENCODE_CWD="$WORKDIR"
 
 # Pre-seed Red Hat theme
 OC_THEMES="$HOME/.config/openchamber/themes"

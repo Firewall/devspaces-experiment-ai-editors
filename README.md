@@ -182,6 +182,8 @@ Remove definitions with the matching `*-unregister` target. For manual Orca regi
 
 The Containerfiles pin T3 Code, OpenChamber, OpenCode, Orca, and OpenClaw to explicit versions. T3 Code pins the latest stable release (`T3_VERSION` in [t3-code/Containerfile](t3-code/Containerfile)); set it to a `nightly` tag such as `0.1.6-nightly.20261030.3917` to track nightlies. Update the version declarations when testing a newer release. Base images, Google Cloud SDK downloads, the OpenShift CLI, and the VS Code stable CLI still follow moving releases, so builds are not fully reproducible.
 
+OpenChamber and OpenCode have to move together. OpenChamber 2.x drives the OpenCode 2.x CLI and rejects the legacy `opencode-ai` 1.x package, so [openchamber/Containerfile](openchamber/Containerfile) installs `@opencode/cli` while the other editors stay on `opencode-ai`. OpenChamber 2.5.3 declares `node >= 24.14` in its `engines` field, but it runs on the Node.js 22.22.3 that the universal developer image ships.
+
 The `t3` npm package installs only a launcher. On first start the launcher downloads the self-contained runtime from the T3 Code GitHub release into `T3CODE_HOME` (`/projects/.devspaces-t3code/t3code-home`), so the workspace needs egress to `github.com` once per version. Later restarts reuse the cached runtime. T3 Code 0.1.x prints a bootstrap pairing URL when the server starts; the entrypoint redacts that token before it reaches `/t3code/entrypoint-logs.txt`.
 
 Images target `linux/amd64`. On ARM machines, most stages need emulation. Orca builds on the host architecture and packages an amd64 runtime to avoid esbuild failures under emulation. Orca v1.4.219 needs [web-client.patch](orca/web-client.patch) to serve its web client and initialize terminal creation.
