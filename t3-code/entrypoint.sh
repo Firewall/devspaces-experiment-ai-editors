@@ -23,14 +23,25 @@ export NODE_OPTIONS="--unhandled-rejections=warn"
 
 cd "${PROJECTS_ROOT:-/projects}" || exit 1
 
+# T3 Code 0.1.x prints a bootstrap pairing URL for the running server on startup.
+# The devfile redirects this script's output to a log file, so keep the credential out of it.
+redact_pairing_url() {
+  sed -u -E \
+    -e 's#(token=)[A-Za-z0-9_-]+#\1[redacted]#g' \
+    -e 's#(token%3D)[A-Za-z0-9_-]+#\1[redacted]#g' \
+    -e 's#(Token:[[:space:]]*)[A-Za-z0-9_-]+#\1[redacted]#g'
+}
+
 while true; do
-  t3 serve \
+  # `start` serves the same web UI as `serve`, but it prints one pairing URL line
+  # instead of `serve`'s token, app link, and terminal QR code.
+  t3 start \
     --host 0.0.0.0 \
     --port 3773 \
     --no-browser \
     --mode web \
     --auto-bootstrap-project-from-cwd \
-    "${PROJECTS_ROOT:-/projects}" &
+    "${PROJECTS_ROOT:-/projects}" > >(redact_pairing_url) 2>&1 &
   T3_PID=$!
 
   sleep 5
