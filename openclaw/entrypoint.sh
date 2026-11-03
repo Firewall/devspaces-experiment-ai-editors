@@ -23,25 +23,7 @@ export OPENCLAW_GATEWAY_PORT=18789
 source /usr/local/bin/shared-runtime.sh
 setup_runtime /usr/local/bin/shared-bashrc.sh || exit 1
 
-# KServe discovery writes a provider fragment that seed-config.sh merges in.
-# The OpenCode config it also writes lives in PERSIST because OpenClaw does not
-# read it; /projects stays free for the user's repositories.
-if [ -f /usr/local/bin/shared-discover-models.sh ]; then
-  bash /usr/local/bin/shared-discover-models.sh \
-    "$PERSIST/opencode.json" backend "" "$PERSIST/models.json"
-fi
-
-# Model providers reference a private copy of the service account token through
-# a file SecretRef. /run/secrets is a symlinked projected volume, which the file
-# SecretRef rejects, so copy it and refresh the copy as it rotates. OpenShift
-# projects short-lived tokens, and OpenClaw re-reads file secrets on reload.
-SA_TOKEN=/run/secrets/kubernetes.io/serviceaccount/token
-SA_TOKEN_COPY="$PERSIST/kserve-token"
-if [ -s "$SA_TOKEN" ]; then
-  cat "$SA_TOKEN" > "$SA_TOKEN_COPY.tmp" && \
-    chmod 600 "$SA_TOKEN_COPY.tmp" && \
-    mv -f "$SA_TOKEN_COPY.tmp" "$SA_TOKEN_COPY" || exit 1
-fi
+# Model providers are configured in the Control UI or with `openclaw config set`.
 
 # Generate a stable gateway token on first start and persist it.
 if [ -z "$OPENCLAW_GATEWAY_TOKEN" ]; then
@@ -60,8 +42,8 @@ chmod 600 "$PERSIST/gateway-token" || exit 1
 export OPENCLAW_GATEWAY_TOKEN
 
 bash /usr/local/bin/openclaw-seed-config.sh \
-  "$OPENCLAW_CONFIG_PATH" "$PERSIST/models.json" \
-  "$OPENCLAW_PUBLIC_ORIGIN" "$OPENCLAW_TRUSTED_PROXIES" "$WORKDIR" "$SA_TOKEN_COPY" || exit 1
+  "$OPENCLAW_CONFIG_PATH" \
+  "$OPENCLAW_PUBLIC_ORIGIN" "$OPENCLAW_TRUSTED_PROXIES" "$WORKDIR" || exit 1
 
 echo ""
 echo "=== OpenClaw ==="
@@ -69,19 +51,6 @@ echo "Gateway token saved. Retrieve it with deploy.sh or oc exec."
 echo ""
 
 cd "$WORKDIR" || exit 1
-
-# The gateway caches resolved secrets, so reload after the token copy changes.
-(
-  while sleep 600; do
-    [ -s "$SA_TOKEN" ] || continue
-    cmp -s "$SA_TOKEN" "$SA_TOKEN_COPY" && continue
-    if cat "$SA_TOKEN" > "$SA_TOKEN_COPY.tmp" && \
-       chmod 600 "$SA_TOKEN_COPY.tmp" && \
-       mv -f "$SA_TOKEN_COPY.tmp" "$SA_TOKEN_COPY"; then
-      node /app/openclaw.mjs secrets reload >/dev/null 2>&1 || true
-    fi
-  done
-) &
 
 # Restart in place; Che gateway probes have crashed Node processes in the past.
 while true; do

@@ -51,8 +51,3 @@ else
 fi
 echo ""
 echo "Shell:    oc exec -it $POD -c openchamber-runtime -n $NAMESPACE -- bash"
-echo ""
-echo "To configure your LLM provider, shell in and edit ~/.config/opencode/config.json"
-echo "For Vertex AI, also run:"
-echo "  export PATH=/openchamber/npm-global/bin:/openchamber/google-cloud-sdk/bin:\$PATH"
-echo "  gcloud auth application-default login --no-launch-browser"

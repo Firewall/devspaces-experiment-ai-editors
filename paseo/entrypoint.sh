@@ -5,30 +5,18 @@ PERSIST="${PROJECTS_ROOT:-/projects}/.devspaces-paseo"
 WORKDIR="${PROJECTS_ROOT:-/projects}"
 umask 077
 
-mkdir -p "$PERSIST/home" "$PERSIST/paseo-home" "$PERSIST/gcloud" || exit 1
+mkdir -p "$PERSIST/home" "$PERSIST/paseo-home" || exit 1
 chmod 700 "$PERSIST" || exit 1
 
 export HOME="$PERSIST/home"
 export PASEO_HOME="$PERSIST/paseo-home"
 export SHELL=/bin/bash
-export CLOUDSDK_CONFIG="$PERSIST/gcloud"
-export PATH="/usr/lib/google-cloud-sdk/bin:${PATH}"
 
 # shellcheck source=shared/runtime.sh
 source /usr/local/bin/shared-runtime.sh
 setup_runtime /usr/local/bin/shared-bashrc.sh || exit 1
 
 mkdir -p "$HOME/.config" "$HOME/.local/share" "$HOME/.local/state"
-
-# KServe discovery configures OpenCode, which Paseo runs as an agent. Keep
-# OpenCode's default tools and permissions, as for Orca.
-if [ -f /usr/local/bin/shared-discover-models.sh ]; then
-  bash /usr/local/bin/shared-discover-models.sh \
-    "${WORKDIR}/opencode.json" agent
-fi
-if [ -s "${WORKDIR}/opencode.json" ]; then
-  export OPENCODE_CONFIG="${WORKDIR}/opencode.json"
-fi
 
 # Paseo hashes PASEO_PASSWORD at startup, so exporting the persisted value on
 # every launch keeps the password stable across workspace restarts.

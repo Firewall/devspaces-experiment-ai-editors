@@ -3,20 +3,17 @@ schemaVersion: 2.2.2
 metadata:
   name: vs-code-agent-host/vs-code-agent-host-editor/latest
   displayName: VS Code Agent Host
-  description: VS Code Agent Host with BYOK models and bubblewrap sandboxing
+  description: VS Code Agent Host with bubblewrap sandboxing
   attributes:
     publisher: vs-code-agent-host
     version: latest
-    title: VS Code Agent Host — AI agents on Red Hat AI
+    title: VS Code Agent Host
     firstPublicationDate: '2026-09-01'
 
 components:
   - name: vs-code-agent-host
     container:
       image: ${AGENT_HOST_IMAGE}
-      env:
-        - name: REDHAT_AI_NAMESPACE
-          value: "${REDHAT_AI_NAMESPACE}"
       command:
         - /bin/bash
         - -c

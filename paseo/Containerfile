@@ -6,31 +6,15 @@ FROM ghcr.io/getpaseo/paseo:${PASEO_VERSION}
 
 USER 0
 
-# Search helpers for the agents, jq for scripting, and Python for the Google
-# Cloud SDK used by the optional Vertex AI provider.
+# Search helpers for the agents, jq for scripting, and Python for workspace
+# tooling.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends fd-find jq python3 ripgrep && \
     ln -s /usr/bin/fdfind /usr/local/bin/fd && \
     rm -rf /var/lib/apt/lists/*
 
-RUN ARCH=$(uname -m) && \
-    if [ "$ARCH" = "aarch64" ]; then GCLOUD_ARCH="arm"; else GCLOUD_ARCH="x86_64"; fi && \
-    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
-      | tar -xz -C /usr/lib
-
-# OpenCode is the agent Paseo runs against Red Hat AI models. Paseo supports
-# OpenCode 1.x and 2.x; the repository pins 1.x.
-ARG OPENCODE_VERSION=1.18.34
-RUN npm install -g "opencode-ai@${OPENCODE_VERSION}"
-
-# OpenShift CLI for KServe model discovery, matching the other integrations.
-RUN curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz" \
-      | tar xz -C /usr/local/bin oc kubectl && \
-    chmod 755 /usr/local/bin/oc /usr/local/bin/kubectl
-
 COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
 COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
-COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
 COPY paseo/entrypoint.sh /usr/local/bin/paseo-entrypoint.sh
 
 # Keep state on the workspace volume. The base image defaults to /home/paseo,
@@ -44,8 +28,7 @@ ENV HOME=/projects/.devspaces-paseo/home \
     XDG_DATA_HOME=/projects/.devspaces-paseo/home/.local/share \
     XDG_STATE_HOME=/projects/.devspaces-paseo/home/.local/state \
     XDG_CACHE_HOME=/projects/.devspaces-paseo/home/.cache \
-    PASEO_DICTATION_ENABLED=false \
-    PATH=/usr/lib/google-cloud-sdk/bin:${PATH}
+    PASEO_DICTATION_ENABLED=false
 
 # OpenShift runs an arbitrary UID in GID 0. Make the passwd entry writable so
 # startup can register that UID for git, npm, and agent subprocesses, and keep

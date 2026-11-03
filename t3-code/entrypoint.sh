@@ -4,20 +4,15 @@
 source /t3code/runtime.sh
 setup_runtime /t3code/bashrc.sh || exit 1
 
-export PATH="/t3code/npm-global/bin:/t3code/google-cloud-sdk/bin:${PATH}"
-
-if [ -f /t3code/discover-models.sh ]; then
-  bash /t3code/discover-models.sh "${PROJECTS_ROOT:-/projects}/opencode.json"
-fi
+export PATH="/t3code/npm-global/bin:${PATH}"
 
 PERSIST="${PROJECTS_ROOT:-/projects}/.devspaces-t3code"
-mkdir -p "$PERSIST/gcloud" "$PERSIST/t3code-home" || exit 1
+mkdir -p "$PERSIST/t3code-home" || exit 1
 chmod 700 "$PERSIST" || exit 1
 if [ -f "$PERSIST/pairing-token.txt" ]; then
   chmod 600 "$PERSIST/pairing-token.txt" || exit 1
 fi
 
-export CLOUDSDK_CONFIG="$PERSIST/gcloud"
 export T3CODE_HOME="$PERSIST/t3code-home"
 export NODE_OPTIONS="--unhandled-rejections=warn"
 

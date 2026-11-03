@@ -24,8 +24,6 @@ components:
           value: "${PASEO_HOSTNAMES}"
         - name: PASEO_TRUSTED_PROXIES
           value: "${PASEO_TRUSTED_PROXIES}"
-        - name: REDHAT_AI_NAMESPACE
-          value: "${REDHAT_AI_NAMESPACE}"
       command:
         - /bin/bash
         - -c

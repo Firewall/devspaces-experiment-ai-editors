@@ -3,8 +3,7 @@ FROM registry.access.redhat.com/ubi9/nodejs-22
 USER 0
 
 RUN dnf install -y --disablerepo='*' --enablerepo='ubi-*' git socat && \
-    curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz" \
-      | tar xz -C /usr/local/bin oc kubectl
+    dnf clean all
 
 # Build bubblewrap from source (not in UBI repos)
 ENV BWRAP_VERSION=0.11.0
@@ -28,18 +27,8 @@ RUN curl -fsSL "https://code.visualstudio.com/sha/download?build=stable&os=cli-a
     rm /tmp/vscode-cli.tar.gz && \
     chmod +x /usr/local/bin/code
 
-# Google Cloud SDK
-RUN ARCH=$(uname -m) && \
-    if [ "$ARCH" = "aarch64" ]; then GCLOUD_ARCH="arm"; else GCLOUD_ARCH="x86_64"; fi && \
-    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
-      | tar -xz -C /usr/lib
-
-ARG OPENCODE_VERSION=1.19.5
-RUN npm install -g "opencode-ai@${OPENCODE_VERSION}"
-
 COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
 COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
-COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
 COPY vs-code-agent-host/entrypoint.sh /usr/local/bin/agent-host-entrypoint.sh
 
 RUN chgrp -R 0 /opt/app-root && \

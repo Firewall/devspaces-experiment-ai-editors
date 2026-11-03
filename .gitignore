@@ -16,7 +16,5 @@ agent-host-logs.txt
 pairing-token.txt
 ui-password.txt
 connection-token
-chatLanguageModels.json
 openclaw.json
 gateway-token
-opencode.json

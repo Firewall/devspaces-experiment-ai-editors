@@ -56,10 +56,7 @@ class EditorScriptTests(unittest.TestCase):
             "OPENCLAW_IMAGE=localhost/test-openclaw\n"
             "PASEO_IMAGE=localhost/test-paseo\n"
             "BOB_IMAGE=localhost/test-bob\n"
-            "GOOGLE_CLOUD_PROJECT=test-project\n"
-            "CLOUD_ML_REGION=test-region\n"
             "OPENCHAMBER_UI_PASSWORD=test-password\n"
-            "REDHAT_AI_NAMESPACE=test-models\n"
         )
         self.bin = self.root / "bin"
         self.bin.mkdir()
@@ -179,7 +176,7 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 components = yaml.safe_load(template)["spec"]["components"]
                 runtime = next(component for component in components
                                if component["name"] == (editor if editor == "vs-code-agent-host" else f"{editor}-runtime"))
-                self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": "test-models"}, runtime["container"]["env"])
+                self.assertIn("main", runtime["container"]["endpoints"][0]["attributes"]["type"])
                 if editor in ("orca", "openclaw", "paseo"):
                     # These create the Route first: Orca needs its pairing address,
                     # OpenClaw its public origin, and Paseo its hostname allowlist entry.
@@ -270,23 +267,6 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
         self.assertIn("Review and accept", result.stderr)
         self.assertEqual(self.command_log(), [])
 
-    def test_all_deployments_leave_model_namespace_empty_when_unconfigured(self):
-        config = self.root / "config.env"
-        original = config.read_text()
-        self.env.pop("REDHAT_AI_NAMESPACE", None)
-        for setting in ("", "REDHAT_AI_NAMESPACE=\n"):
-            config.write_text(original.replace("REDHAT_AI_NAMESPACE=test-models\n", setting))
-            for editor in EDITORS:
-                with self.subTest(editor=editor, setting=setting):
-                    result, commands = self.run_script(editor, "deploy.sh")
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    template = next(entry["manifest"] for entry in commands
-                                    if "kind: DevWorkspaceTemplate\n" in entry.get("manifest", ""))
-                    components = yaml.safe_load(template)["spec"]["components"]
-                    runtime = next(component for component in components
-                                   if component["name"] == (editor if editor == "vs-code-agent-host" else f"{editor}-runtime"))
-                    self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": ""}, runtime["container"]["env"])
-
     def register_devfile(self, editor):
         prefix = {"t3-code": "t3", "openchamber": "chamber", "orca": "orca",
                   "vs-code-agent-host": "vscode", "openclaw": "openclaw", "paseo": "paseo"}[editor]
@@ -300,9 +280,6 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
         return yaml.safe_load(output.read_text())
 
     def test_deployment_and_registration_share_devfile_spec_and_defaults(self):
-        config = self.root / "config.env"
-        config.write_text(config.read_text().replace("REDHAT_AI_NAMESPACE=test-models\n", ""))
-        self.env.pop("REDHAT_AI_NAMESPACE", None)
         self.env["ORCA_PAIRING_ADDRESS"] = "wss://editor.test.example/"
         self.env["OPENCLAW_PUBLIC_ORIGIN"] = "https://editor.test.example"
         self.env["PASEO_HOSTNAMES"] = "editor.test.example"
@@ -318,7 +295,6 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 self.assertEqual(template["spec"], spec)
                 runtime = next(component["container"] for component in spec["components"] if "endpoints" in component.get("container", {}))
                 self.assertEqual(runtime["endpoints"][0]["attributes"]["type"], "main")
-                self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": ""}, runtime["env"])
 
     def test_devfile_edits_reach_both_deployment_and_registration(self):
         for editor in EDITORS:
@@ -507,29 +483,17 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
         self.assertEqual(len((home / ".bashrc").read_text().splitlines()), 1)
         self.assertEqual((home / ".bashrc").stat().st_mode & 0o777, 0o600)
 
-    def seed_openclaw_config(self, config, fragment, origin="https://openclaw.test.example",
-                             proxies="10.0.0.0/8, 172.16.0.0/12", token_file=None):
+    def seed_openclaw_config(self, config, origin="https://openclaw.test.example",
+                             proxies="10.0.0.0/8, 172.16.0.0/12"):
         return subprocess.run(
             ["bash", str(REPO / "openclaw/seed-config.sh"), str(config),
-             str(fragment) if fragment else "", origin, proxies, "/projects",
-             str(token_file) if token_file else ""],
+             origin, proxies, "/projects"],
             env=self.env, capture_output=True, text=True, timeout=15,
         )
 
-    def test_openclaw_config_seed_sets_gateway_defaults_and_models(self):
+    def test_openclaw_config_seed_sets_gateway_defaults(self):
         config = self.root / "openclaw.json"
-        fragment = self.root / "models.json"
-        token_file = self.root / "kserve-token"
-        fragment.write_text(json.dumps({
-            "primary": "redhat-code-model/served-model",
-            "providers": {"redhat-code-model": {
-                "baseUrl": "https://isvc-code-model-predictor.models.svc.cluster.local:8443/v1",
-                "api": "openai-completions",
-                "apiKey": {"source": "file", "provider": "kserve-sa", "id": "value"},
-                "models": [{"id": "served-model", "name": "Code Model", "contextWindow": 32768}],
-            }},
-        }))
-        result = self.seed_openclaw_config(config, fragment, token_file=token_file)
+        result = self.seed_openclaw_config(config)
         self.assertEqual(result.returncode, 0, result.stderr)
         seeded = json.loads(config.read_text())
         self.assertEqual(seeded["gateway"]["mode"], "local")
@@ -540,31 +504,19 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
         self.assertEqual(seeded["gateway"]["trustedProxies"], ["10.0.0.0/8", "172.16.0.0/12"])
         self.assertTrue(seeded["gateway"]["controlUi"]["enabled"])
         self.assertEqual(seeded["agents"]["defaults"]["workspace"], "/projects")
-        self.assertEqual(seeded["agents"]["defaults"]["model"]["primary"], "redhat-code-model/served-model")
         self.assertEqual(seeded["cron"], {"enabled": False})
-        self.assertEqual(seeded["secrets"]["providers"]["kserve-sa"], {
-            "source": "file", "path": str(token_file), "mode": "singleValue",
-        })
-        provider = seeded["models"]["providers"]["redhat-code-model"]
-        self.assertEqual(provider["api"], "openai-completions")
-        self.assertEqual(provider["apiKey"], {"source": "file", "provider": "kserve-sa", "id": "value"})
-        self.assertEqual(provider["models"][0]["contextWindow"], 32768)
-        self.assertNotIn("test-service-token", config.read_text())
+        self.assertNotIn("models", seeded)
+        self.assertNotIn("secrets", seeded)
         self.assertEqual(config.stat().st_mode & 0o777, 0o600)
 
     def test_openclaw_config_seed_preserves_control_ui_edits_and_model_choice(self):
         config = self.root / "openclaw.json"
-        fragment = self.root / "models.json"
-        fragment.write_text(json.dumps({
-            "primary": "redhat-new/new-model",
-            "providers": {"redhat-new": {"baseUrl": "https://new/v1", "models": [{"id": "new-model"}]}},
-        }))
         config.write_text(json.dumps({
             "uiNote": "keep me",
             "gateway": {"auth": {"mode": "password"}, "controlUi": {"theme": "custom"}},
             "agents": {"defaults": {"model": {"primary": "manual/choice"}}},
         }))
-        result = self.seed_openclaw_config(config, fragment)
+        result = self.seed_openclaw_config(config)
         self.assertEqual(result.returncode, 0, result.stderr)
         seeded = json.loads(config.read_text())
         self.assertEqual(seeded["uiNote"], "keep me")
@@ -572,13 +524,12 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
         self.assertEqual(seeded["gateway"]["controlUi"]["theme"], "custom")
         self.assertTrue(seeded["gateway"]["controlUi"]["enabled"])
         self.assertEqual(seeded["agents"]["defaults"]["model"]["primary"], "manual/choice")
-        self.assertIn("redhat-new", seeded["models"]["providers"])
         self.assertEqual(config.stat().st_mode & 0o777, 0o600)
 
     def test_openclaw_config_seed_refuses_invalid_json(self):
         config = self.root / "openclaw.json"
         config.write_text("{ not json\n")
-        result = self.seed_openclaw_config(config, None)
+        result = self.seed_openclaw_config(config)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(config.read_text(), "{ not json\n")
         self.assertIn("not valid JSON", result.stderr)

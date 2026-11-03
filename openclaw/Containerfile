@@ -13,14 +13,8 @@ RUN apt-get update && \
     ln -s /usr/bin/fdfind /usr/local/bin/fd && \
     rm -rf /var/lib/apt/lists/*
 
-# OpenShift CLI for KServe model discovery, matching the other integrations.
-RUN curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz" \
-      | tar xz -C /usr/local/bin oc kubectl && \
-    chmod 755 /usr/local/bin/oc /usr/local/bin/kubectl
-
 COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
 COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
-COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
 COPY openclaw/seed-config.sh /usr/local/bin/openclaw-seed-config.sh
 COPY openclaw/entrypoint.sh /usr/local/bin/openclaw-entrypoint.sh
 

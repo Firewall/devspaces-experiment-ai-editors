@@ -68,7 +68,7 @@ Create an **Inference** API key in your Bob subscription and save it in a privat
 
 The script creates `bob-credentials` in your configured namespace using file contents sent through stdin. It does not print the key. DevWorkspace mounts the Secret at `/etc/secret/bob-credentials`, scoped to `bob-workspace`, on its next start. Stop and start the workspace through the Dev Spaces dashboard after creating or updating credentials. Other workspaces do not need to restart.
 
-For a local container, mount a directory containing `BOB_API_KEY` and `settings.json` at `/etc/secret/bob-credentials:ro`. Credentials stay out of the image and devfile. This PoC targets IBM's hosted Bob service. It does not configure a self-hosted Bob gateway or use the repo's KServe discovery.
+For a local container, mount a directory containing `BOB_API_KEY` and `settings.json` at `/etc/secret/bob-credentials:ro`. Credentials stay out of the image and devfile. This PoC targets IBM's hosted Bob service. It does not configure a self-hosted Bob gateway.
 
 ## Work on a repository
 
