@@ -27,6 +27,11 @@ OPENCLAW_DIR = openclaw
 OPENCLAW_CONFIGMAP ?= openclaw-editor-definition
 OPENCLAW_DEVFILE = $(OPENCLAW_DIR)/devfile.yaml
 
+# ---- Paseo ----
+PASEO_DIR = paseo
+PASEO_CONFIGMAP ?= paseo-editor-definition
+PASEO_DEVFILE = $(PASEO_DIR)/devfile.yaml
+
 BOB_DIR = bob
 BOB_CONFIGMAP ?= bob-editor-definition
 BOB_DEVFILE = $(BOB_DIR)/devfile.yaml
@@ -39,6 +44,8 @@ BOB_DEVFILE = $(BOB_DIR)/devfile.yaml
         vscode-register vscode-unregister vscode-devfile \
         openclaw-build openclaw-push openclaw-deploy openclaw-teardown \
         openclaw-register openclaw-unregister openclaw-devfile \
+        paseo-build paseo-push paseo-deploy paseo-teardown \
+        paseo-register paseo-unregister paseo-devfile \
         bob-build bob-push bob-deploy bob-test bob-teardown bob-register bob-unregister bob-devfile
 
 check-namespace:
@@ -179,6 +186,35 @@ openclaw-deploy:
 
 openclaw-teardown:
 	$(OPENCLAW_DIR)/teardown.sh
+
+# === Paseo targets ===
+paseo-build:
+	podman build --platform linux/amd64 -f $(PASEO_DIR)/Containerfile -t $(PASEO_IMAGE) .
+
+paseo-push:
+	podman push $(PASEO_IMAGE)
+
+paseo-devfile:
+	python3 shared/render-devfile.py "$(PASEO_DEVFILE)" --output "$(PASEO_DIR)/devfile-rendered.yaml"
+
+paseo-register: check-namespace paseo-devfile
+	oc create configmap $(PASEO_CONFIGMAP) \
+	  --from-file=$(PASEO_DIR)/devfile-rendered.yaml \
+	  -n $(NAMESPACE)
+	oc label configmap $(PASEO_CONFIGMAP) \
+	  app.kubernetes.io/part-of=che.eclipse.org \
+	  app.kubernetes.io/component=editor-definition \
+	  -n $(NAMESPACE)
+	@rm -f $(PASEO_DIR)/devfile-rendered.yaml
+
+paseo-unregister: check-namespace
+	oc delete configmap $(PASEO_CONFIGMAP) -n $(NAMESPACE)
+
+paseo-deploy:
+	$(PASEO_DIR)/deploy.sh
+
+paseo-teardown:
+	$(PASEO_DIR)/teardown.sh
 
 # === IBM Bob PoC targets ===
 bob-build:

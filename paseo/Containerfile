@@ -1,0 +1,63 @@
+# Paseo ships an image that already runs its daemon and bundled web UI, so this
+# integration extends that image instead of injecting into the universal
+# developer image.
+ARG PASEO_VERSION=0.15.0
+FROM ghcr.io/getpaseo/paseo:${PASEO_VERSION}
+
+USER 0
+
+# Search helpers for the agents, jq for scripting, and Python for the Google
+# Cloud SDK used by the optional Vertex AI provider.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends fd-find jq python3 ripgrep && \
+    ln -s /usr/bin/fdfind /usr/local/bin/fd && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "aarch64" ]; then GCLOUD_ARCH="arm"; else GCLOUD_ARCH="x86_64"; fi && \
+    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
+      | tar -xz -C /usr/lib
+
+# OpenCode is the agent Paseo runs against Red Hat AI models. Paseo supports
+# OpenCode 1.x and 2.x; the repository pins 1.x.
+ARG OPENCODE_VERSION=1.18.34
+RUN npm install -g "opencode-ai@${OPENCODE_VERSION}"
+
+# OpenShift CLI for KServe model discovery, matching the other integrations.
+RUN curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz" \
+      | tar xz -C /usr/local/bin oc kubectl && \
+    chmod 755 /usr/local/bin/oc /usr/local/bin/kubectl
+
+COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
+COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
+COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
+COPY paseo/entrypoint.sh /usr/local/bin/paseo-entrypoint.sh
+
+# Keep state on the workspace volume. The base image defaults to /home/paseo,
+# which an arbitrary OpenShift UID can read but cannot own. Disable local
+# dictation so a new workspace does not download speech models.
+ENV HOME=/projects/.devspaces-paseo/home \
+    PASEO_HOME=/projects/.devspaces-paseo/paseo-home \
+    CLAUDE_CONFIG_DIR=/projects/.devspaces-paseo/home/.claude \
+    CODEX_HOME=/projects/.devspaces-paseo/home/.codex \
+    XDG_CONFIG_HOME=/projects/.devspaces-paseo/home/.config \
+    XDG_DATA_HOME=/projects/.devspaces-paseo/home/.local/share \
+    XDG_STATE_HOME=/projects/.devspaces-paseo/home/.local/state \
+    XDG_CACHE_HOME=/projects/.devspaces-paseo/home/.cache \
+    PASEO_DICTATION_ENABLED=false \
+    PATH=/usr/lib/google-cloud-sdk/bin:${PATH}
+
+# OpenShift runs an arbitrary UID in GID 0. Make the passwd entry writable so
+# startup can register that UID for git, npm, and agent subprocesses, and keep
+# /projects writable by both the image's user and that group in case no source
+# volume is mounted.
+RUN mkdir -p /projects && \
+    chown paseo:0 /projects && chmod 775 /projects && \
+    chmod 755 /usr/local/bin/shared-*.sh /usr/local/bin/paseo-*.sh && \
+    chgrp 0 /etc/passwd && chmod g=u /etc/passwd
+
+# The base image runs as root and drops privileges with gosu. The entrypoint
+# handles that itself, so declare the image's unprivileged user instead.
+USER paseo
+
+ENTRYPOINT ["/usr/local/bin/paseo-entrypoint.sh"]

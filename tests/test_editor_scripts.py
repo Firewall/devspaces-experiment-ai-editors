@@ -19,6 +19,7 @@ EDITORS = {
     "orca": ("orca-direct", 6768, "180s"),
     "vs-code-agent-host": ("agent-host-direct", 3773, "300s"),
     "openclaw": ("openclaw-direct", 18789, "300s"),
+    "paseo": ("paseo-direct", 6767, "300s"),
 }
 
 
@@ -53,6 +54,7 @@ class EditorScriptTests(unittest.TestCase):
             "ORCA_IMAGE=localhost/test-orca\n"
             "AGENT_HOST_IMAGE=localhost/test-vscode\n"
             "OPENCLAW_IMAGE=localhost/test-openclaw\n"
+            "PASEO_IMAGE=localhost/test-paseo\n"
             "BOB_IMAGE=localhost/test-bob\n"
             "GOOGLE_CLOUD_PROJECT=test-project\n"
             "CLOUD_ML_REGION=test-region\n"
@@ -178,13 +180,15 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 runtime = next(component for component in components
                                if component["name"] == (editor if editor == "vs-code-agent-host" else f"{editor}-runtime"))
                 self.assertIn({"name": "REDHAT_AI_NAMESPACE", "value": "test-models"}, runtime["container"]["env"])
-                if editor in ("orca", "openclaw"):
-                    # Both create the Route first: Orca needs its pairing address,
-                    # OpenClaw needs its public origin.
+                if editor in ("orca", "openclaw", "paseo"):
+                    # These create the Route first: Orca needs its pairing address,
+                    # OpenClaw its public origin, and Paseo its hostname allowlist entry.
                     self.assertIs(manifests[0], direct_route)
                     self.assertIn(f"controller.devfile.io/devworkspace_name: {editor}-workspace", direct_route)
                     if editor == "orca":
                         self.assertIn("wss://editor.test.example/", template)
+                    elif editor == "paseo":
+                        self.assertIn("editor.test.example", template)
                     else:
                         self.assertIn("https://editor.test.example", template)
                 else:
@@ -285,7 +289,7 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
 
     def register_devfile(self, editor):
         prefix = {"t3-code": "t3", "openchamber": "chamber", "orca": "orca",
-                  "vs-code-agent-host": "vscode", "openclaw": "openclaw"}[editor]
+                  "vs-code-agent-host": "vscode", "openclaw": "openclaw", "paseo": "paseo"}[editor]
         result = subprocess.run(
             ["make", f"{prefix}-devfile"], cwd=self.root, env=self.env,
             capture_output=True, text=True, timeout=15,
@@ -301,6 +305,7 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
         self.env.pop("REDHAT_AI_NAMESPACE", None)
         self.env["ORCA_PAIRING_ADDRESS"] = "wss://editor.test.example/"
         self.env["OPENCLAW_PUBLIC_ORIGIN"] = "https://editor.test.example"
+        self.env["PASEO_HOSTNAMES"] = "editor.test.example"
         for editor in EDITORS:
             with self.subTest(editor=editor):
                 result, commands = self.run_script(editor, "deploy.sh")
