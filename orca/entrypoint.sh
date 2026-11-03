@@ -14,7 +14,7 @@ chmod 600 "$PERSIST/ready.jsonl" || exit 1
 
 export ORCA_USER_DATA="$PERSIST/orca-home"
 export ORCA_WEB_ROOT=/orca/web
-export ORCA_VERSION=1.4.219
+export ORCA_VERSION=1.4.247
 
 cd "${PROJECTS_ROOT:-/projects}" || exit 1
 

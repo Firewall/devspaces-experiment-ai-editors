@@ -8,7 +8,7 @@ RUN dnf install -y --disablerepo='*' --enablerepo='ubi-*' patch unzip && \
     npm install -g pnpm@12.0.0
 
 # Pin the source so the standalone runtime and web client use the same protocol.
-ENV ORCA_VERSION=1.4.219
+ENV ORCA_VERSION=1.4.247
 WORKDIR /src/orca
 RUN curl -fsSL "https://github.com/stablyai/orca/archive/refs/tags/v${ORCA_VERSION}.tar.gz" \
       | tar -xz --strip-components=1
