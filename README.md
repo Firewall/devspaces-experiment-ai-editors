@@ -202,6 +202,8 @@ The Containerfiles pin T3 Code, OpenChamber, Orca, OpenClaw, and Paseo to explic
 
 Three pins stay manual. `HEADLESSBOB_REV` in `bob/Containerfile` is pinned to the revision the `bob/*.patch` files apply against. The `pnpm` version in `orca/Containerfile` is a build toolchain choice. The VS Code stable CLI is an unversioned download, so no datasource can track it. Node base image minor updates are proposed, but major bumps are suppressed because each editor picks its Node line deliberately.
 
+Orca updates wait for approval on the Renovate dependency dashboard. Upstream 1.4.247 replaced the Bun-packaged `orcad` runtime with a pinned Node layout and moved the web-client root and terminal-graph setup into the runtime itself, so bumping the tag means porting [orca/Containerfile](orca/Containerfile) and [orca/entrypoint.sh](orca/entrypoint.sh) instead of rebasing [web-client.patch](orca/web-client.patch).
+
 OpenChamber and OpenCode have to move together. OpenChamber 2.x drives the OpenCode 2.x CLI and rejects the legacy `opencode-ai` 1.x package, so [openchamber/Containerfile](openchamber/Containerfile) installs `@opencode/cli`. OpenChamber 2.x declares `node >= 24.14` in its `engines` field, but it runs on the Node.js 22.22.3 that the universal developer image ships.
 
 The `t3` npm package installs only a launcher. On first start the launcher downloads the self-contained runtime from the T3 Code GitHub release into `T3CODE_HOME` (`/projects/.devspaces-t3code/t3code-home`), so the workspace needs egress to `github.com` once per version. Later restarts reuse the cached runtime. T3 Code 0.1.x prints a bootstrap pairing URL when the server starts; the entrypoint redacts that token before it reaches `/t3code/entrypoint-logs.txt`.

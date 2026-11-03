@@ -58,8 +58,10 @@
       "description": "Orca is built from a release tarball that orca/web-client.patch is rebased against.",
       "matchPackageNames": ["stablyai/orca"],
       "commitMessageTopic": "Orca",
+      "dependencyDashboardApproval": true,
       "prBodyNotes": [
-        "`orca/web-client.patch` is applied on top of this tag, so watch the Orca build in the Build images workflow before merging."
+        "`orca/web-client.patch` is applied on top of this tag and `orca/entrypoint.sh` launches the packaged runtime, so watch the Orca build in the Build images workflow before merging.",
+        "1.4.247 replaced the Bun-packaged `orcad` runtime with a pinned-Node layout (`build-orcad-node.mjs`, `runtimes/node-<sha256>/bin/node`) and moved web-client and terminal-graph setup upstream. Porting that is not a version bump; approve on the dependency dashboard once the Containerfile and entrypoint are updated."
       ]
     },
     {
