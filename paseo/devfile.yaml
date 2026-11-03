@@ -1,15 +1,33 @@
-schemaVersion: 2.2.2
+schemaVersion: 2.3.0
 
 metadata:
-  name: getpaseo/paseo-editor/latest
+  name: paseo
   displayName: Paseo + OpenCode
   description: Agentic development environment with parallel agents, terminals, and diffs
+  tags:
+    - ai
+    - agents
+    - opencode
+    - ide
   attributes:
-    publisher: getpaseo
-    version: latest
     title: Paseo — agentic coding on Red Hat AI
-    firstPublicationDate: '2026-11-03'
+    arch:
+      - x86_64
+    publisher: devspaces-experiment
+    version: latest
+    provider: Provided by the [Paseo project](https://github.com/getpaseo/paseo). See the upstream repository for its license terms.
     repository: https://github.com/getpaseo/paseo
+    firstPublicationDate: '2026-11-03'
+    iconMediatype: image/svg+xml
+    iconData: |
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+        <rect width="64" height="64" rx="14" fill="#1b1030"/>
+        <path d="M14 19h24v6H14z" fill="#a78bfa"/>
+        <path d="M14 31h32v6H14z" fill="#a78bfa"/>
+        <path d="M14 43h20v6H14z" fill="#a78bfa"/>
+        <circle cx="49" cy="22" r="4" fill="#4fc3f7"/>
+        <circle cx="51" cy="46" r="4" fill="#4fc3f7"/>
+      </svg>
 
 components:
   - name: paseo-runtime

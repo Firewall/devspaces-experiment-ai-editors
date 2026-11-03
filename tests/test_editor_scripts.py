@@ -21,6 +21,16 @@ EDITORS = {
     "openclaw": ("openclaw-direct", 18789, "300s"),
     "paseo": ("paseo-direct", 6767, "300s"),
 }
+# Makefile prefix and ConfigMap name for every registrable editor definition.
+REGISTRATIONS = {
+    "t3-code": ("t3", "t3-code-editor-definition"),
+    "openchamber": ("chamber", "openchamber-editor-definition"),
+    "orca": ("orca", "orca-editor-definition"),
+    "vs-code-agent-host": ("vscode", "vs-code-agent-host-editor-definition"),
+    "openclaw": ("openclaw", "openclaw-editor-definition"),
+    "paseo": ("paseo", "paseo-editor-definition"),
+    "bob": ("bob", "bob-editor-definition"),
+}
 
 
 def workspace_pod(name="workspace-pod", *, ready=True, created="2026-10-03T12:00:00Z", phase="Running", deleting=False):
@@ -278,6 +288,68 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
         output = self.root / editor / "devfile-rendered.yaml"
         self.assertEqual(output.stat().st_mode & 0o777, 0o600)
         return yaml.safe_load(output.read_text())
+
+    def test_registration_applies_labelled_editor_definition_configmaps(self):
+        for editor, (prefix, configmap) in REGISTRATIONS.items():
+            with self.subTest(editor=editor):
+                self.log.unlink(missing_ok=True)
+                result = subprocess.run(
+                    ["make", f"{prefix}-register"], cwd=self.root, env=self.env,
+                    capture_output=True, text=True, timeout=15,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                commands = self.command_log()
+                self.assertEqual(len(commands), 1)
+                entry = commands[0]
+                self.assertEqual(entry["tool"], "oc")
+                self.assertEqual(entry["args"][:2], ["apply", "-n"])
+                self.assertEqual(entry["args"][entry["args"].index("-n") + 1], "test-workspaces")
+                self.assertEqual(entry["args"][-2:], ["-f", "-"])
+                manifest = yaml.safe_load(entry["manifest"])
+                self.assertEqual(manifest["kind"], "ConfigMap")
+                self.assertEqual(manifest["metadata"]["name"], configmap)
+                self.assertEqual(manifest["metadata"]["labels"], {
+                    "app.kubernetes.io/part-of": "che.eclipse.org",
+                    "app.kubernetes.io/component": "editor-definition",
+                })
+                definition = yaml.safe_load(manifest["data"]["devfile.yaml"])
+                attributes = definition["metadata"]["attributes"]
+                self.assertEqual(
+                    f"{attributes['publisher']}/{definition['metadata']['name']}/{attributes['version']}",
+                    f"devspaces-experiment/{editor}/{'poc' if editor == 'bob' else 'latest'}",
+                )
+                self.assertIn("arch", attributes)
+                self.assertEqual(attributes["iconMediatype"], "image/svg+xml")
+                self.assertIn("<svg", attributes["iconData"])
+
+    def test_definition_target_writes_a_ready_to_apply_manifest(self):
+        for editor, (prefix, configmap) in REGISTRATIONS.items():
+            with self.subTest(editor=editor):
+                result = subprocess.run(
+                    ["make", f"{prefix}-definition"], cwd=self.root, env=self.env,
+                    capture_output=True, text=True, timeout=15,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                output = self.root / editor / "editor-definition.yaml"
+                self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+                manifest = yaml.safe_load(output.read_text())
+                self.assertEqual(manifest["kind"], "ConfigMap")
+                self.assertEqual(manifest["metadata"]["name"], configmap)
+                self.assertIn("devfile.yaml", manifest["data"])
+
+    def test_incomplete_editor_metadata_stops_before_cluster_commands(self):
+        path = self.root / "orca/devfile.yaml"
+        devfile = yaml.safe_load(path.read_text())
+        del devfile["metadata"]["attributes"]["arch"]
+        path.write_text(yaml.safe_dump(devfile, sort_keys=False))
+        self.log.unlink(missing_ok=True)
+        result = subprocess.run(
+            ["make", "orca-register"], cwd=self.root, env=self.env,
+            capture_output=True, text=True, timeout=15,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("metadata.attributes.arch", result.stderr)
+        self.assertEqual(self.command_log(), [])
 
     def test_deployment_and_registration_share_devfile_spec_and_defaults(self):
         self.env["ORCA_PAIRING_ADDRESS"] = "wss://editor.test.example/"

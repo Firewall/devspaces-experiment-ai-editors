@@ -1,4 +1,4 @@
-"""Render an editor devfile or wrap its spec in a DevWorkspaceTemplate."""
+"""Render an editor devfile, a DevWorkspaceTemplate, or a Che editor definition."""
 
 import argparse
 import os
@@ -32,6 +32,11 @@ DEFAULTS = {
     "OPENCLAW_GATEWAY_TOKEN": "",
 }
 PLACEHOLDER = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
+# Che builds an editor id as publisher/metadata.name/version and shows the editor
+# in the dashboard picker. Upstream definitions keep these values in sync, so
+# reject definitions the dashboard would silently drop or mislabel.
+EDITOR_NAME = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$")
+EDITOR_ARCHES = {"x86_64", "arm64", "s390x", "ppc64le"}
 
 
 def substitute(value, environment):
@@ -53,7 +58,44 @@ def substitute(value, environment):
     return value
 
 
-def render(path, environment, template_name=None):
+def editor_definition(document, configmap_name):
+    """Wrap a rendered devfile in the ConfigMap Che reads editor definitions from."""
+    metadata = document.get("metadata")
+    attributes = metadata.get("attributes") if isinstance(metadata, dict) else None
+    if not isinstance(attributes, dict):
+        raise ValueError("Editor definitions need metadata.attributes")
+
+    missing = [key for key in ("publisher", "version", "arch") if not attributes.get(key)]
+    if missing:
+        raise ValueError(f"Editor definitions need metadata.attributes.{', metadata.attributes.'.join(missing)}")
+
+    name = metadata.get("name")
+    if not isinstance(name, str) or not EDITOR_NAME.match(name):
+        raise ValueError("Editor metadata.name must be lower case alphanumeric characters, '-' or '.'")
+
+    arch = attributes["arch"]
+    if not isinstance(arch, list) or not arch or set(arch) - EDITOR_ARCHES:
+        raise ValueError(f"Editor metadata.attributes.arch must be a nonempty list of: {', '.join(sorted(EDITOR_ARCHES))}")
+
+    return {
+        "apiVersion": "v1",
+        "kind": "ConfigMap",
+        "metadata": {
+            "name": configmap_name,
+            "labels": {
+                "app.kubernetes.io/part-of": "che.eclipse.org",
+                "app.kubernetes.io/component": "editor-definition",
+            },
+        },
+        # The dashboard reads every value in data, so the key only needs to be
+        # descriptive. devfile.yaml matches the upstream editor definitions.
+        "data": {"devfile.yaml": yaml.safe_dump(document, sort_keys=False, allow_unicode=True)},
+    }
+
+
+def render(path, environment, template_name=None, configmap_name=None):
+    if template_name and configmap_name:
+        raise ValueError("Choose either a DevWorkspaceTemplate or an editor definition ConfigMap")
     document = yaml.safe_load(Path(path).read_text())
     if not isinstance(document, dict) or not isinstance(document.get("components"), list) or not document["components"]:
         raise ValueError("The devfile must contain a nonempty components list")
@@ -65,6 +107,8 @@ def render(path, environment, template_name=None):
             "metadata": {"name": template_name},
             "spec": {key: value for key, value in document.items() if key not in ("schemaVersion", "metadata")},
         }
+    elif configmap_name:
+        document = editor_definition(document, configmap_name)
     return document
 
 
@@ -86,11 +130,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("devfile", type=Path)
     parser.add_argument("--template", help="DevWorkspaceTemplate resource name")
+    parser.add_argument("--configmap", metavar="NAME", help="Wrap the devfile in a Che editor definition ConfigMap")
     parser.add_argument("--output", type=Path, help="Write a private rendered file instead of stdout")
     parser.add_argument("--check", action="store_true", help="Validate the devfile and variables without writing output")
     args = parser.parse_args()
     try:
-        document = render(args.devfile, os.environ, args.template)
+        document = render(args.devfile, os.environ, args.template, args.configmap)
         if args.check:
             return
         text = yaml.safe_dump(document, sort_keys=False, allow_unicode=True)

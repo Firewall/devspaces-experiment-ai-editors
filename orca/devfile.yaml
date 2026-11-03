@@ -1,15 +1,35 @@
-schemaVersion: 2.2.2
+schemaVersion: 2.3.0
 
 metadata:
-  name: stablyai/orca-editor/latest
+  name: orca
   displayName: Orca
   description: Web development environment for coding agents and parallel worktrees
+  tags:
+    - ai
+    - agents
+    - worktrees
+    - ide
   attributes:
-    publisher: stablyai
-    version: latest
     title: Orca coding agents and worktrees
-    firstPublicationDate: '2026-10-03'
+    arch:
+      - x86_64
+    publisher: devspaces-experiment
+    version: latest
+    provider: Provided by [Stably AI](https://www.onorca.dev/) under the [MIT License](https://github.com/stablyai/orca/blob/main/LICENSE)
     repository: https://github.com/stablyai/orca
+    firstPublicationDate: '2026-10-03'
+    iconMediatype: image/svg+xml
+    iconData: |
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+        <rect width="64" height="64" rx="14" fill="#0d1b2a"/>
+        <path d="M28 27 L34 11 L39 27 Z" fill="#e8eef3"/>
+        <path d="M47 36 L61 25 L57.5 36 L61 47 Z" fill="#e8eef3"/>
+        <ellipse cx="29" cy="36" rx="20" ry="9.5" fill="#e8eef3"/>
+        <ellipse cx="29" cy="40" rx="17" ry="5" fill="#b9c7d2"/>
+        <ellipse cx="17" cy="33" rx="3.6" ry="2.1" fill="#0d1b2a"/>
+        <circle cx="12" cy="37" r="1.6" fill="#0d1b2a"/>
+        <circle cx="50" cy="19" r="4" fill="#4fc3f7"/>
+      </svg>
 
 commands:
   - id: init-orca-injector

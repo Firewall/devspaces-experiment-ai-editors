@@ -36,20 +36,27 @@ BOB_DIR = bob
 BOB_CONFIGMAP ?= bob-editor-definition
 BOB_DEVFILE = $(BOB_DIR)/devfile.yaml
 
-.PHONY: check-namespace t3-build t3-push t3-register t3-unregister t3-devfile \
-        chamber-build chamber-push chamber-register chamber-unregister chamber-devfile \
-        orca-build orca-push orca-register orca-unregister orca-devfile \
+.PHONY: check-namespace t3-build t3-push t3-register t3-unregister t3-devfile t3-definition \
+        chamber-build chamber-push chamber-register chamber-unregister chamber-devfile chamber-definition \
+        orca-build orca-push orca-register orca-unregister orca-devfile orca-definition \
         orca-deploy orca-teardown \
         vscode-build vscode-push vscode-deploy vscode-test vscode-teardown \
-        vscode-register vscode-unregister vscode-devfile \
+        vscode-register vscode-unregister vscode-devfile vscode-definition \
         openclaw-build openclaw-push openclaw-deploy openclaw-teardown \
-        openclaw-register openclaw-unregister openclaw-devfile \
+        openclaw-register openclaw-unregister openclaw-devfile openclaw-definition \
         paseo-build paseo-push paseo-deploy paseo-teardown \
-        paseo-register paseo-unregister paseo-devfile \
-        bob-build bob-push bob-deploy bob-test bob-teardown bob-register bob-unregister bob-devfile
+        paseo-register paseo-unregister paseo-devfile paseo-definition \
+        bob-build bob-push bob-deploy bob-test bob-teardown bob-register bob-unregister bob-devfile bob-definition
 
 check-namespace:
 	@test -n "$(NAMESPACE)" || { echo "Set NAMESPACE in config.env before registering or removing editors."; exit 1; }
+
+# Render an editor definition ConfigMap and apply it. Render into a shell variable
+# first so a devfile error stops before any cluster command runs.
+define register_editor_definition
+definition=$$(python3 shared/render-devfile.py "$(1)" --configmap "$(2)") && \
+printf '%s\n' "$$definition" | oc apply -n $(NAMESPACE) -f -
+endef
 
 # === T3 Code targets ===
 t3-build:
@@ -61,15 +68,12 @@ t3-push:
 t3-devfile:
 	python3 shared/render-devfile.py "$(T3_DEVFILE)" --output "$(T3_DIR)/devfile-rendered.yaml"
 
-t3-register: check-namespace t3-devfile
-	oc create configmap $(T3_CONFIGMAP) \
-	  --from-file=$(T3_DIR)/devfile-rendered.yaml \
-	  -n $(NAMESPACE)
-	oc label configmap $(T3_CONFIGMAP) \
-	  app.kubernetes.io/part-of=che.eclipse.org \
-	  app.kubernetes.io/component=editor-definition \
-	  -n $(NAMESPACE)
-	@rm -f $(T3_DIR)/devfile-rendered.yaml
+t3-definition:
+	python3 shared/render-devfile.py "$(T3_DEVFILE)" --configmap "$(T3_CONFIGMAP)" \
+	  --output "$(T3_DIR)/editor-definition.yaml"
+
+t3-register: check-namespace
+	@$(call register_editor_definition,$(T3_DEVFILE),$(T3_CONFIGMAP))
 
 t3-unregister: check-namespace
 	oc delete configmap $(T3_CONFIGMAP) -n $(NAMESPACE)
@@ -84,15 +88,12 @@ chamber-push:
 chamber-devfile:
 	python3 shared/render-devfile.py "$(CHAMBER_DEVFILE)" --output "$(CHAMBER_DIR)/devfile-rendered.yaml"
 
-chamber-register: check-namespace chamber-devfile
-	oc create configmap $(CHAMBER_CONFIGMAP) \
-	  --from-file=$(CHAMBER_DIR)/devfile-rendered.yaml \
-	  -n $(NAMESPACE)
-	oc label configmap $(CHAMBER_CONFIGMAP) \
-	  app.kubernetes.io/part-of=che.eclipse.org \
-	  app.kubernetes.io/component=editor-definition \
-	  -n $(NAMESPACE)
-	@rm -f $(CHAMBER_DIR)/devfile-rendered.yaml
+chamber-definition:
+	python3 shared/render-devfile.py "$(CHAMBER_DEVFILE)" --configmap "$(CHAMBER_CONFIGMAP)" \
+	  --output "$(CHAMBER_DIR)/editor-definition.yaml"
+
+chamber-register: check-namespace
+	@$(call register_editor_definition,$(CHAMBER_DEVFILE),$(CHAMBER_CONFIGMAP))
 
 chamber-unregister: check-namespace
 	oc delete configmap $(CHAMBER_CONFIGMAP) -n $(NAMESPACE)
@@ -107,15 +108,12 @@ orca-push:
 orca-devfile:
 	python3 shared/render-devfile.py "$(ORCA_DEVFILE)" --output "$(ORCA_DIR)/devfile-rendered.yaml"
 
-orca-register: check-namespace orca-devfile
-	oc create configmap $(ORCA_CONFIGMAP) \
-	  --from-file=$(ORCA_DIR)/devfile-rendered.yaml \
-	  -n $(NAMESPACE)
-	oc label configmap $(ORCA_CONFIGMAP) \
-	  app.kubernetes.io/part-of=che.eclipse.org \
-	  app.kubernetes.io/component=editor-definition \
-	  -n $(NAMESPACE)
-	@rm -f $(ORCA_DIR)/devfile-rendered.yaml
+orca-definition:
+	python3 shared/render-devfile.py "$(ORCA_DEVFILE)" --configmap "$(ORCA_CONFIGMAP)" \
+	  --output "$(ORCA_DIR)/editor-definition.yaml"
+
+orca-register: check-namespace
+	@$(call register_editor_definition,$(ORCA_DEVFILE),$(ORCA_CONFIGMAP))
 
 orca-deploy:
 	$(ORCA_DIR)/deploy.sh
@@ -136,15 +134,12 @@ vscode-push:
 vscode-devfile:
 	python3 shared/render-devfile.py "$(VSCODE_DEVFILE)" --output "$(VSCODE_DIR)/devfile-rendered.yaml"
 
-vscode-register: check-namespace vscode-devfile
-	oc create configmap $(VSCODE_CONFIGMAP) \
-	  --from-file=$(VSCODE_DIR)/devfile-rendered.yaml \
-	  -n $(NAMESPACE)
-	oc label configmap $(VSCODE_CONFIGMAP) \
-	  app.kubernetes.io/part-of=che.eclipse.org \
-	  app.kubernetes.io/component=editor-definition \
-	  -n $(NAMESPACE)
-	@rm -f $(VSCODE_DIR)/devfile-rendered.yaml
+vscode-definition:
+	python3 shared/render-devfile.py "$(VSCODE_DEVFILE)" --configmap "$(VSCODE_CONFIGMAP)" \
+	  --output "$(VSCODE_DIR)/editor-definition.yaml"
+
+vscode-register: check-namespace
+	@$(call register_editor_definition,$(VSCODE_DEVFILE),$(VSCODE_CONFIGMAP))
 
 vscode-deploy:
 	$(VSCODE_DIR)/deploy.sh
@@ -168,15 +163,12 @@ openclaw-push:
 openclaw-devfile:
 	python3 shared/render-devfile.py "$(OPENCLAW_DEVFILE)" --output "$(OPENCLAW_DIR)/devfile-rendered.yaml"
 
-openclaw-register: check-namespace openclaw-devfile
-	oc create configmap $(OPENCLAW_CONFIGMAP) \
-	  --from-file=$(OPENCLAW_DIR)/devfile-rendered.yaml \
-	  -n $(NAMESPACE)
-	oc label configmap $(OPENCLAW_CONFIGMAP) \
-	  app.kubernetes.io/part-of=che.eclipse.org \
-	  app.kubernetes.io/component=editor-definition \
-	  -n $(NAMESPACE)
-	@rm -f $(OPENCLAW_DIR)/devfile-rendered.yaml
+openclaw-definition:
+	python3 shared/render-devfile.py "$(OPENCLAW_DEVFILE)" --configmap "$(OPENCLAW_CONFIGMAP)" \
+	  --output "$(OPENCLAW_DIR)/editor-definition.yaml"
+
+openclaw-register: check-namespace
+	@$(call register_editor_definition,$(OPENCLAW_DEVFILE),$(OPENCLAW_CONFIGMAP))
 
 openclaw-unregister: check-namespace
 	oc delete configmap $(OPENCLAW_CONFIGMAP) -n $(NAMESPACE)
@@ -197,15 +189,12 @@ paseo-push:
 paseo-devfile:
 	python3 shared/render-devfile.py "$(PASEO_DEVFILE)" --output "$(PASEO_DIR)/devfile-rendered.yaml"
 
-paseo-register: check-namespace paseo-devfile
-	oc create configmap $(PASEO_CONFIGMAP) \
-	  --from-file=$(PASEO_DIR)/devfile-rendered.yaml \
-	  -n $(NAMESPACE)
-	oc label configmap $(PASEO_CONFIGMAP) \
-	  app.kubernetes.io/part-of=che.eclipse.org \
-	  app.kubernetes.io/component=editor-definition \
-	  -n $(NAMESPACE)
-	@rm -f $(PASEO_DIR)/devfile-rendered.yaml
+paseo-definition:
+	python3 shared/render-devfile.py "$(PASEO_DEVFILE)" --configmap "$(PASEO_CONFIGMAP)" \
+	  --output "$(PASEO_DIR)/editor-definition.yaml"
+
+paseo-register: check-namespace
+	@$(call register_editor_definition,$(PASEO_DEVFILE),$(PASEO_CONFIGMAP))
 
 paseo-unregister: check-namespace
 	oc delete configmap $(PASEO_CONFIGMAP) -n $(NAMESPACE)
@@ -235,10 +224,12 @@ bob-teardown:
 bob-devfile:
 	python3 shared/render-devfile.py "$(BOB_DEVFILE)" --output "$(BOB_DIR)/devfile-rendered.yaml"
 
-bob-register: check-namespace bob-devfile
-	oc create configmap $(BOB_CONFIGMAP) --from-file=$(BOB_DIR)/devfile-rendered.yaml -n $(NAMESPACE)
-	oc label configmap $(BOB_CONFIGMAP) app.kubernetes.io/part-of=che.eclipse.org app.kubernetes.io/component=editor-definition -n $(NAMESPACE)
-	@rm -f $(BOB_DIR)/devfile-rendered.yaml
+bob-definition:
+	python3 shared/render-devfile.py "$(BOB_DEVFILE)" --configmap "$(BOB_CONFIGMAP)" \
+	  --output "$(BOB_DIR)/editor-definition.yaml"
+
+bob-register: check-namespace
+	@$(call register_editor_definition,$(BOB_DEVFILE),$(BOB_CONFIGMAP))
 
 bob-unregister: check-namespace
 	oc delete configmap $(BOB_CONFIGMAP) -n $(NAMESPACE)
