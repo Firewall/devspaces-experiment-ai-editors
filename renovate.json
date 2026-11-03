@@ -1,0 +1,117 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard"
+  ],
+  "description": "Keeps the upstream ADE releases named in the Containerfiles current. Renovate only opens pull requests; the Build images workflow builds each affected image, and merging is left to a reviewer.",
+  "semanticCommits": "disabled",
+  "labels": ["dependencies"],
+  "automerge": false,
+  "prConcurrentLimit": 8,
+  "prHourlyLimit": 0,
+  "dockerfile": {
+    "managerFilePatterns": ["/(^|/)(Docker|Container)file$/"]
+  },
+  "kubernetes": {
+    "enabled": false
+  },
+  "packageRules": [
+    {
+      "description": "T3 Code pins the latest stable release. Nightlies stay a manual switch, so do not follow the nightly dist-tag.",
+      "matchPackageNames": ["t3"],
+      "commitMessageTopic": "T3 Code",
+      "prBodyNotes": [
+        "The `t3` npm package installs a launcher that downloads the matching runtime from the GitHub release on first start. Check that the release is published before merging."
+      ]
+    },
+    {
+      "description": "OpenChamber 2.x drives the OpenCode 2.x CLI, so review the two together even though they version independently.",
+      "matchPackageNames": ["@openchamber/web", "@opencode/cli"],
+      "groupName": "OpenChamber and OpenCode CLI",
+      "commitMessageTopic": "OpenChamber stack"
+    },
+    {
+      "description": "OpenClaw tags images with calver plus -amd64 and -arm64 variants, so only accept the bare dated tags.",
+      "matchPackageNames": ["ghcr.io/openclaw/openclaw"],
+      "allowedVersions": "/^\\d{4}\\.\\d{1,2}\\.\\d{1,2}$/",
+      "commitMessageTopic": "OpenClaw"
+    },
+    {
+      "description": "Paseo publishes beta tags next to releases. Keep to released versions.",
+      "matchPackageNames": ["ghcr.io/getpaseo/paseo"],
+      "allowedVersions": "/^\\d+\\.\\d+\\.\\d+$/",
+      "commitMessageTopic": "Paseo"
+    },
+    {
+      "description": "Keep base images on their current major. Node 22 vs 24 is a deliberate choice per editor, and UBI 9 is pinned by the platform.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": [
+        "registry.access.redhat.com/ubi9/nodejs-22",
+        "registry.access.redhat.com/ubi9/nodejs-24",
+        "node"
+      ],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "Orca is built from a release tarball that orca/web-client.patch is rebased against.",
+      "matchPackageNames": ["stablyai/orca"],
+      "commitMessageTopic": "Orca",
+      "prBodyNotes": [
+        "`orca/web-client.patch` is applied on top of this tag, so watch the Orca build in the Build images workflow before merging."
+      ]
+    },
+    {
+      "description": "bubblewrap is compiled from source in vs-code-agent-host/Containerfile.",
+      "matchPackageNames": ["containers/bubblewrap"],
+      "commitMessageTopic": "bubblewrap",
+      "prBodyNotes": [
+        "bubblewrap is built from source with meson in `vs-code-agent-host/Containerfile`, so watch the vs-code-agent-host build before merging."
+      ]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "T3 Code version in t3-code/Containerfile",
+      "managerFilePatterns": ["/(^|/)Containerfile$/"],
+      "matchStrings": ["ARG T3_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "t3",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "OpenChamber web version",
+      "managerFilePatterns": ["/(^|/)Containerfile$/"],
+      "matchStrings": ["ARG OPENCHAMBER_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "@openchamber/web",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "OpenCode CLI version installed alongside OpenChamber",
+      "managerFilePatterns": ["/(^|/)Containerfile$/"],
+      "matchStrings": ["ARG OPENCODE_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "@opencode/cli",
+      "datasourceTemplate": "npm"
+    },
+    {
+      "customType": "regex",
+      "description": "Orca release tag. The tarball URL interpolates ${ORCA_VERSION}, and entrypoint.sh exports the same value to the standalone runtime, so both declarations must move together.",
+      "managerFilePatterns": ["/^orca/(Containerfile|entrypoint\\.sh)$/"],
+      "matchStrings": ["(?:ENV|export) ORCA_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "stablyai/orca",
+      "datasourceTemplate": "github-tags"
+    },
+    {
+      "customType": "regex",
+      "description": "bubblewrap source version",
+      "managerFilePatterns": ["/(^|/)Containerfile$/"],
+      "matchStrings": ["ENV BWRAP_VERSION=(?<currentValue>\\S+)"],
+      "depNameTemplate": "containers/bubblewrap",
+      "datasourceTemplate": "github-releases",
+      "extractVersionTemplate": "^v(?<version>.*)$"
+    }
+  ]
+}
