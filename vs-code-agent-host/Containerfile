@@ -6,7 +6,7 @@ RUN dnf install -y --disablerepo='*' --enablerepo='ubi-*' git socat && \
     dnf clean all
 
 # Build bubblewrap from source (not in UBI repos)
-ENV BWRAP_VERSION=0.11.0
+ENV BWRAP_VERSION=0.13.1
 RUN dnf install -y --disablerepo='*' --enablerepo='ubi-*' \
       gcc meson libcap-devel && \
     curl -sSL "https://github.com/containers/bubblewrap/releases/download/v${BWRAP_VERSION}/bubblewrap-${BWRAP_VERSION}.tar.xz" \
