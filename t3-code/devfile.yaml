@@ -2,12 +2,12 @@ schemaVersion: 2.2.2
 
 metadata:
   name: t3-code/t3-code-editor/latest
-  displayName: T3 Code + Claude
-  description: AI-native coding environment powered by Claude on Vertex AI
+  displayName: T3 Code
+  description: Minimal web GUI for coding agents
   attributes:
     publisher: t3-code
     version: latest
-    title: T3 Code + Claude — AI-native coding on Vertex AI
+    title: T3 Code
     firstPublicationDate: '2025-01-01'
     repository: https://github.com/pingdotgg/t3code
 
@@ -44,9 +44,6 @@ components:
   - name: t3-code-runtime
     container:
       image: quay.io/devfile/universal-developer-image:latest
-      env:
-        - name: REDHAT_AI_NAMESPACE
-          value: "${REDHAT_AI_NAMESPACE}"
       volumeMounts:
         - name: t3code
           path: /t3code

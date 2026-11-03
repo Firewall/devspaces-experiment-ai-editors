@@ -1,20 +1,18 @@
 #!/bin/bash
 # Seed or merge the OpenClaw gateway config without discarding Control UI edits.
-# Usage: seed-config.sh CONFIG [MODELS_FRAGMENT] [PUBLIC_ORIGIN] [TRUSTED_PROXIES] [WORKSPACE] [SA_TOKEN_FILE]
+# Usage: seed-config.sh CONFIG [PUBLIC_ORIGIN] [TRUSTED_PROXIES] [WORKSPACE]
 set -e
 
 CONFIG="${1:?seed-config: config path required}"
-FRAGMENT="${2:-}"
-ORIGIN="${3:-}"
-PROXIES="${4:-}"
-WORKSPACE="${5:-/projects}"
-TOKEN_FILE="${6:-}"
+ORIGIN="${2:-}"
+PROXIES="${3:-}"
+WORKSPACE="${4:-/projects}"
 
-node - "$CONFIG" "$FRAGMENT" "$ORIGIN" "$PROXIES" "$WORKSPACE" "$TOKEN_FILE" <<'EOF'
+node - "$CONFIG" "$ORIGIN" "$PROXIES" "$WORKSPACE" <<'EOF'
 const fs = require('fs');
 const path = require('path');
 
-const [configPath, fragmentPath, origin, proxies, workspace, tokenFile] = process.argv.slice(2);
+const [configPath, origin, proxies, workspace] = process.argv.slice(2);
 
 let config = {};
 if (fs.existsSync(configPath)) {
@@ -54,35 +52,6 @@ if (!config.agents.defaults.workspace) config.agents.defaults.workspace = worksp
 // A workspace stops when idle, so scheduled jobs would replay on restart.
 // cron.skipMissedJobs defaults to false, which runs every missed slot at once.
 if (!config.cron) config.cron = { enabled: false };
-
-// KServe model providers reference this file instead of an inline token, so a
-// rotated service account token is picked up on the next secrets reload.
-if (tokenFile) {
-  config.secrets = config.secrets || {};
-  config.secrets.providers = config.secrets.providers || {};
-  config.secrets.providers['kserve-sa'] = {
-    source: 'file',
-    path: tokenFile,
-    mode: 'singleValue',
-  };
-}
-
-if (fragmentPath && fs.existsSync(fragmentPath)) {
-  let fragment;
-  try {
-    fragment = JSON.parse(fs.readFileSync(fragmentPath, 'utf8'));
-  } catch (error) {
-    console.error(`seed-config: ${fragmentPath} is not valid JSON: ${error.message}`);
-    process.exit(1);
-  }
-  config.models = config.models || {};
-  config.models.providers = config.models.providers || {};
-  Object.assign(config.models.providers, fragment.providers || {});
-  // Keep a model the user picked in the Control UI.
-  if (!config.agents.defaults.model && fragment.primary) {
-    config.agents.defaults.model = { primary: fragment.primary };
-  }
-}
 
 fs.mkdirSync(path.dirname(configPath), { recursive: true, mode: 0o700 });
 fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });

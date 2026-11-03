@@ -4,35 +4,18 @@
 source /openchamber/runtime.sh
 setup_runtime /openchamber/bashrc.sh || exit 1
 
-export PATH="/openchamber/npm-global/bin:/openchamber/google-cloud-sdk/bin:${PATH}"
+export PATH="/openchamber/npm-global/bin:${PATH}"
 
 # Pin OpenCode port so it doesn't conflict with other services in the pod
 export OPENCODE_PORT=4096
 
 PERSIST="${PROJECTS_ROOT:-/projects}/.devspaces-openchamber"
-mkdir -p "$PERSIST/gcloud" \
-         "$PERSIST/opencode-config" \
-         "$PERSIST/opencode-share" \
-         "$PERSIST/opencode-state" \
-         "$PERSIST/openchamber-config" || exit 1
+mkdir -p "$PERSIST/openchamber-config" || exit 1
 chmod 700 "$PERSIST" || exit 1
 
-# Symlink XDG dirs so OpenCode and OpenChamber state survives workspace restarts
-mkdir -p "$HOME/.config" "$HOME/.local/share" "$HOME/.local/state"
-ln -sfn "$PERSIST/opencode-config"    "$HOME/.config/opencode"
-ln -sfn "$PERSIST/opencode-share"     "$HOME/.local/share/opencode"
-ln -sfn "$PERSIST/opencode-state"     "$HOME/.local/state/opencode"
+# Symlink the XDG dir so OpenChamber state survives workspace restarts
+mkdir -p "$HOME/.config"
 ln -sfn "$PERSIST/openchamber-config" "$HOME/.config/openchamber"
-
-if [ -f /openchamber/discover-models.sh ]; then
-  bash /openchamber/discover-models.sh "${PROJECTS_ROOT:-/projects}/opencode.json"
-fi
-
-# Vertex AI (if configured)
-if [ -n "$GOOGLE_CLOUD_PROJECT" ]; then
-  export CLOUDSDK_CONFIG="$PERSIST/gcloud"
-  ln -sfn "$PERSIST/gcloud" "$HOME/.config/gcloud"
-fi
 
 # Generate a stable UI password on first start, persist it
 if [ -z "$OPENCHAMBER_UI_PASSWORD" ]; then

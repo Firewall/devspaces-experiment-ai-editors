@@ -4,21 +4,14 @@ USER 0
 
 RUN dnf install -y --disablerepo='*' --enablerepo='ubi-*' git && dnf clean all
 
-RUN ARCH=$(uname -m) && \
-    if [ "$ARCH" = "aarch64" ]; then GCLOUD_ARCH="arm"; else GCLOUD_ARCH="x86_64"; fi && \
-    curl -fsSL "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-${GCLOUD_ARCH}.tar.gz" \
-      | tar -xz -C /usr/lib
-
 # The t3 npm package installs a launcher; the self-contained runtime is downloaded
 # into T3CODE_HOME on first start (see t3-code/entrypoint.sh).
 # Switch T3_VERSION to a `nightly` tag such as 0.1.6-nightly.20261030.3917 to track nightlies.
 ARG T3_VERSION=0.1.5
-ARG OPENCODE_VERSION=1.19.5
-RUN npm install -g "t3@${T3_VERSION}" "opencode-ai@${OPENCODE_VERSION}"
+RUN npm install -g "t3@${T3_VERSION}"
 
 COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
 COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
-COPY shared/discover-models.sh /usr/local/bin/shared-discover-models.sh
 COPY t3-code/entrypoint.sh /usr/local/bin/t3code-entrypoint.sh
 COPY t3-code/entrypoint-init-container.sh /entrypoint-init-container.sh
 

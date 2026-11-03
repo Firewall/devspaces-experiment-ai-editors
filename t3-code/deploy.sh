@@ -49,9 +49,3 @@ else
 fi
 echo ""
 echo "Shell: oc exec -it $POD -c t3-code-runtime -n $NAMESPACE -- bash"
-echo ""
-echo "KServe models are discovered automatically when the workspace can access them."
-echo "For optional Vertex AI authentication:"
-echo "  oc exec -it $POD -c t3-code-runtime -n $NAMESPACE -- bash"
-echo "  export PATH=/t3code/npm-global/bin:/t3code/google-cloud-sdk/bin:\$PATH"
-echo "  gcloud auth application-default login --no-launch-browser"

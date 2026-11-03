@@ -1,4 +1,4 @@
-# AI editors for OpenShift Dev Spaces
+# Editors for OpenShift Dev Spaces
 
 Run T3 Code, OpenChamber, Orca, OpenClaw, Paseo, or VS Code Agent Host in OpenShift Dev Spaces workspaces. This repository contains container recipes, devfiles, and scripts that build an image and create a workspace in your user namespace.
 
@@ -6,14 +6,14 @@ A [Headless Bob proof of concept](bob/README.md) adds a browser console with a s
 
 This is an experiment. Direct OpenShift Routes work around Che gateway routing limitations, and upstream editor changes can break the integrations. It is a community project with no production support commitment.
 
-| Integration | AI setup | Port | Authentication | Client |
-| --- | --- | --- | --- | --- |
-| [T3 Code](https://github.com/pingdotgg/t3code) | OpenCode with optional KServe model discovery | 3773 | Pairing token | Browser |
-| [OpenChamber](https://github.com/openchamber/openchamber) | OpenCode providers, including KServe | 3000 | UI password | Browser |
-| [Orca](https://github.com/stablyai/orca) | OpenCode with KServe model discovery | 6768 | Browser pairing URL | Browser |
-| [OpenClaw](https://github.com/openclaw/openclaw) | KServe model discovery or any OpenClaw provider | 18789 | Gateway token | Browser |
-| [Paseo](https://github.com/getpaseo/paseo) | OpenCode with KServe model discovery | 6767 | Password | Browser |
-| [VS Code Agent Host](https://code.visualstudio.com/) | Discovered KServe models and OpenCode | 3773 | Connection token | Compatible VS Code client |
+| Integration | Port | Authentication | Client |
+| --- | --- | --- | --- |
+| [T3 Code](https://github.com/pingdotgg/t3code) | 3773 | Pairing token | Browser |
+| [OpenChamber](https://github.com/openchamber/openchamber) | 3000 | UI password | Browser |
+| [Orca](https://github.com/stablyai/orca) | 6768 | Browser pairing URL | Browser |
+| [OpenClaw](https://github.com/openclaw/openclaw) | 18789 | Gateway token | Browser |
+| [Paseo](https://github.com/getpaseo/paseo) | 6767 | Password | Browser |
+| [VS Code Agent Host](https://code.visualstudio.com/) | 3773 | Connection token | Compatible VS Code client |
 
 VS Code Agent Host exposes an agent service. Its URL is a service endpoint for a compatible client, rather than a browser IDE.
 
@@ -26,7 +26,7 @@ VS Code Agent Host exposes an agent service. Its URL is a service endpoint for a
 - Permission to create DevWorkspaces, DevWorkspaceTemplates, Services, and Routes in your Dev Spaces user namespace.
 - A registry you can push to and that workspace pods can pull from. A public image is convenient on shared clusters where you cannot configure pull credentials. Check [upstream terms](#license) before publishing images, particularly the VS Code integration.
 
-Cluster-wide editor registration additionally needs admin permissions. Google Vertex AI is optional and requires a Google Cloud project with access to your chosen models.
+Cluster-wide editor registration additionally needs admin permissions.
 
 Install the local renderer dependency in a virtual environment and activate it before running deployment, registration, or tests:
 
@@ -57,7 +57,7 @@ AGENT_HOST_IMAGE=quay.io/my-org/devspaces-vs-code-agent-host:latest
 
 Run `oc project -q` to check your current namespace. The scripts require an explicit `NAMESPACE`; the namespace hosting the Dev Spaces operator is usually different from your user namespace.
 
-`config.env` is a local, gitignored Bash file. Leave `GOOGLE_CLOUD_PROJECT` empty unless you use Vertex AI. OpenChamber generates a UI password if `OPENCHAMBER_UI_PASSWORD` is unset.
+`config.env` is a local, gitignored Bash file. OpenChamber generates a UI password if `OPENCHAMBER_UI_PASSWORD` is unset.
 
 ## Deploy
 
@@ -93,7 +93,7 @@ For VS Code Agent Host, check a running deployment with:
 ./vs-code-agent-host/test.sh
 ```
 
-The test checks the pod, CLI, model files, token, bubblewrap, service, and Route. Bubblewrap depends on the cluster allowing user namespaces; a failed check means you should not assume sandboxing works.
+The test checks the pod, CLI, token, bubblewrap, service, and Route. Bubblewrap depends on the cluster allowing user namespaces; a failed check means you should not assume sandboxing works.
 
 ## CI builds
 
@@ -151,33 +151,13 @@ oc exec "$POD" -c t3-code-runtime -n "$NAMESPACE" -- \
 
 For Orca, use the full `pairing.webClientUrl` in its readiness JSON, including the fragment. Treat that URL as a credential. The OpenClaw gateway token grants full operator access to that workspace, including its terminal. The Paseo password protects the daemon API, WebSocket, and terminals; the static login page loads without it. T3 Code creates a pairing token with a 30-day lifetime; an expired, unused token needs to be recreated.
 
-Keep passwords, pairing URLs, logs, and generated model configuration out of issues and pull requests. VS Code's `chatLanguageModels.json` contains a service account token and is written with mode `600`.
+Keep passwords, pairing URLs, and logs out of issues and pull requests.
 
-## AI providers
+## Agents and models
 
-### KServe model discovery
+This repository only builds and deploys the editors. It does not configure model providers or cloud credentials. Use the agents and credentials available in your Dev Spaces workspace, or install what you need in a workspace terminal.
 
-The integrations look for KServe InferenceServices in the namespace configured by `REDHAT_AI_NAMESPACE`. The workspace service account needs permission to list them and authenticate to their model endpoints. Discovery generates `/projects/opencode.json`; VS Code Agent Host also generates `/projects/chatLanguageModels.json`.
-
-For any integration, set `REDHAT_AI_NAMESPACE` in `config.env` before running its `deploy.sh`. All deploy scripts and devfile registration targets pass it to the runtime container. There is no default namespace. Leave the setting empty to skip KServe model discovery.
-
-Discovery skips missing or unreachable services. If your cluster has no shared models, configure an OpenCode provider yourself. T3 Code, OpenChamber, and VS Code Agent Host generate a config that disables OpenCode's own tools for use as an editor backend. Orca and Paseo keep OpenCode's default tools and permissions because they run OpenCode as an agent.
-
-OpenClaw does not use OpenCode. Discovery writes one OpenClaw provider per InferenceService (`redhat-<model>`) into `/projects/.devspaces-openclaw/models.json`, and startup merges those providers into `/projects/.devspaces-openclaw/openclaw.json`. Model calls read the service account token from a private copy at `/projects/.devspaces-openclaw/kserve-token`, which refreshes as the cluster rotates it. A model you pick in the Control UI is kept, and every restart reruns discovery. Delete `openclaw.json` to reseed it from scratch. Configure other providers in Settings or with `openclaw config set`.
-
-In Orca, open a terminal in your repository, run `opencode`, and select a Red Hat AI model with `/models`. Orca sets `OPENCODE_CONFIG` to the generated `/projects/opencode.json`, so discovery also works inside cloned repositories and worktrees. OpenCode merges that config with your user and project settings.
-
-### Other providers
-
-OpenCode supports external providers. Open a workspace terminal or use `oc exec -it` with the container listed above, then configure your provider using [OpenCode's provider documentation](https://opencode.ai/docs/providers/).
-
-For Google Vertex AI, set the project and region required by your provider configuration, then authenticate from the workspace:
-
-```bash
-gcloud auth application-default login --no-launch-browser
-```
-
-OpenChamber and Orca persist OpenCode and Google Cloud state on `/projects`. T3 Code persists its editor state and Google Cloud state. VS Code Agent Host persists its server state and Google Cloud state. OpenClaw persists its config, gateway token, and SQLite state in `/projects/.devspaces-openclaw`. Paseo persists its daemon state, agent credentials, and Google Cloud state in `/projects/.devspaces-paseo`. Other coding agent CLIs can be installed and authenticated in the workspace terminal.
+Editor state persists on `/projects`: T3 Code in `.devspaces-t3code`, OpenChamber in `.devspaces-openchamber`, Orca in `.devspaces-orca`, OpenClaw in `.devspaces-openclaw`, Paseo in `.devspaces-paseo`, and VS Code Agent Host in `.devspaces-agent-host`.
 
 ## Remove a deployment
 
@@ -216,9 +196,9 @@ Remove definitions with the matching `*-unregister` target. For manual Orca regi
 
 ## Versions and limitations
 
-The Containerfiles pin T3 Code, OpenChamber, OpenCode, Orca, OpenClaw, and Paseo to explicit versions. T3 Code pins the latest stable release (`T3_VERSION` in [t3-code/Containerfile](t3-code/Containerfile)); set it to a `nightly` tag such as `0.1.6-nightly.20261030.3917` to track nightlies. Update the version declarations when testing a newer release. Base images, Google Cloud SDK downloads, the OpenShift CLI, and the VS Code stable CLI still follow moving releases, so builds are not fully reproducible.
+The Containerfiles pin T3 Code, OpenChamber, Orca, OpenClaw, and Paseo to explicit versions. T3 Code pins the latest stable release (`T3_VERSION` in [t3-code/Containerfile](t3-code/Containerfile)); set it to a `nightly` tag such as `0.1.6-nightly.20261030.3917` to track nightlies. Update the version declarations when testing a newer release. Base images and the VS Code stable CLI still follow moving releases, so builds are not fully reproducible.
 
-OpenChamber and OpenCode have to move together. OpenChamber 2.x drives the OpenCode 2.x CLI and rejects the legacy `opencode-ai` 1.x package, so [openchamber/Containerfile](openchamber/Containerfile) installs `@opencode/cli` while the other editors stay on `opencode-ai`. OpenChamber 2.5.3 declares `node >= 24.14` in its `engines` field, but it runs on the Node.js 22.22.3 that the universal developer image ships.
+OpenChamber and OpenCode have to move together. OpenChamber 2.x drives the OpenCode 2.x CLI and rejects the legacy `opencode-ai` 1.x package, so [openchamber/Containerfile](openchamber/Containerfile) installs `@opencode/cli`. OpenChamber 2.5.3 declares `node >= 24.14` in its `engines` field, but it runs on the Node.js 22.22.3 that the universal developer image ships.
 
 The `t3` npm package installs only a launcher. On first start the launcher downloads the self-contained runtime from the T3 Code GitHub release into `T3CODE_HOME` (`/projects/.devspaces-t3code/t3code-home`), so the workspace needs egress to `github.com` once per version. Later restarts reuse the cached runtime. T3 Code 0.1.x prints a bootstrap pairing URL when the server starts; the entrypoint redacts that token before it reaches `/t3code/entrypoint-logs.txt`.
 
@@ -240,11 +220,11 @@ Each editor directory contains its `Containerfile`, `devfile.yaml`, `deploy.sh`,
 
 Each `devfile.yaml` defines the editor components, commands, and events. Deployment and admin registration use the same renderer, so changes to those definitions belong in the devfile. The renderer substitutes configuration values and preserves runtime variables such as `$PATH`.
 
-`shared/` contains deployment helpers, the devfile renderer, runtime setup, and KServe discovery. `config.env.example` documents local configuration. The `Makefile` provides build, push, and admin registration targets.
+`shared/` contains deployment helpers, the devfile renderer, and runtime setup. `config.env.example` documents local configuration. The `Makefile` provides build, push, and admin registration targets.
 
 For local changes, check Bash syntax and run ShellCheck before testing a deployment. Keep credentials and rendered devfiles out of commits.
 
-Run the local discovery and editor-script checks with `python3 -m unittest discover -s tests`. They mock cluster and build commands and require Bash and Node.js.
+Run the local editor-script checks with `python3 -m unittest discover -s tests`. They mock cluster and build commands and require Bash and Node.js.
 
 ## License
 

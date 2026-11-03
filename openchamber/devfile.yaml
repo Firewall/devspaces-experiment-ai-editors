@@ -2,12 +2,12 @@ schemaVersion: 2.2.2
 
 metadata:
   name: openchamber/openchamber-editor/latest
-  displayName: OpenChamber + OpenCode
+  displayName: OpenChamber
   description: Agentic development environment with multi-model AI support
   attributes:
     publisher: openchamber
     version: latest
-    title: OpenChamber — agentic coding on OpenCode
+    title: OpenChamber
     firstPublicationDate: '2025-01-01'
     repository: https://github.com/openchamber/openchamber
 
@@ -45,14 +45,8 @@ components:
     container:
       image: quay.io/devfile/universal-developer-image:latest
       env:
-        - name: GOOGLE_CLOUD_PROJECT
-          value: "${GOOGLE_CLOUD_PROJECT}"
-        - name: CLOUD_ML_REGION
-          value: "${CLOUD_ML_REGION}"
         - name: OPENCHAMBER_UI_PASSWORD
           value: "${OPENCHAMBER_UI_PASSWORD}"
-        - name: REDHAT_AI_NAMESPACE
-          value: "${REDHAT_AI_NAMESPACE}"
       volumeMounts:
         - name: openchamber
           path: /openchamber

@@ -73,16 +73,6 @@ else
   exec_pod ldd /usr/local/bin/code 2>&1 | sed 's/^/    /'
 fi
 
-# --- Model discovery ---
-echo ""
-echo "Model discovery:"
-check "opencode.json exists" exec_pod test -f /projects/opencode.json
-check "chatLanguageModels.json exists" exec_pod test -f /projects/chatLanguageModels.json
-
-MODEL_COUNT=$(exec_pod cat /projects/chatLanguageModels.json 2>/dev/null | grep -c '"id"' 2>/dev/null || true)
-MODEL_COUNT=${MODEL_COUNT:-0}
-echo "  [INFO] Discovered $MODEL_COUNT model(s)"
-
 # --- Connection token ---
 echo ""
 echo "Connection token:"
