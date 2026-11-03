@@ -1,0 +1,50 @@
+schemaVersion: 2.2.2
+
+metadata:
+  name: getpaseo/paseo-editor/latest
+  displayName: Paseo + OpenCode
+  description: Agentic development environment with parallel agents, terminals, and diffs
+  attributes:
+    publisher: getpaseo
+    version: latest
+    title: Paseo — agentic coding on Red Hat AI
+    firstPublicationDate: '2026-11-03'
+    repository: https://github.com/getpaseo/paseo
+
+components:
+  - name: paseo-runtime
+    container:
+      image: ${PASEO_IMAGE}
+      mountSources: true
+      sourceMapping: /projects
+      env:
+        - name: PASEO_PASSWORD
+          value: "${PASEO_PASSWORD}"
+        - name: PASEO_HOSTNAMES
+          value: "${PASEO_HOSTNAMES}"
+        - name: PASEO_TRUSTED_PROXIES
+          value: "${PASEO_TRUSTED_PROXIES}"
+        - name: REDHAT_AI_NAMESPACE
+          value: "${REDHAT_AI_NAMESPACE}"
+      command:
+        - /bin/bash
+        - -c
+        - /usr/local/bin/paseo-entrypoint.sh 2>&1 | tee /tmp/paseo-logs.txt
+      memoryLimit: 4096Mi
+      memoryRequest: 1024Mi
+      cpuLimit: 2000m
+      cpuRequest: 200m
+      endpoints:
+        - name: paseo
+          targetPort: 6767
+          exposure: public
+          protocol: https
+          secure: true
+          attributes:
+            type: main
+            cookiesAuthEnabled: true
+            discoverable: false
+            urlRewriteSupported: true
+    attributes:
+      app.kubernetes.io/component: paseo-runtime
+      app.kubernetes.io/part-of: paseo
