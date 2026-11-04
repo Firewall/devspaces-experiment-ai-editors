@@ -10,7 +10,7 @@ RUN dnf install -y --disablerepo='*' --enablerepo='ubi-*' git && dnf clean all
 # binary over bin/opencode.exe, so run it explicitly instead of depending on
 # npm's lifecycle-script policy. 2.5.3 declares engines >= 24.14 and runs on
 # the image's Node.js 22.
-ARG OPENCHAMBER_VERSION=2.6.0
+ARG OPENCHAMBER_VERSION=2.6.1
 ARG OPENCODE_VERSION=2.2.5
 RUN npm install -g --ignore-scripts \
       "@openchamber/web@${OPENCHAMBER_VERSION}" "@opencode/cli@${OPENCODE_VERSION}" && \
