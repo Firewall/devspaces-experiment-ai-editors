@@ -7,7 +7,7 @@ RUN dnf install -y --disablerepo='*' --enablerepo='ubi-*' git && dnf clean all
 # The t3 npm package installs a launcher; the self-contained runtime is downloaded
 # into T3CODE_HOME on first start (see t3-code/entrypoint.sh).
 # Switch T3_VERSION to a `nightly` tag such as 0.1.6-nightly.20261030.3917 to track nightlies.
-ARG T3_VERSION=0.1.6
+ARG T3_VERSION=0.1.7
 RUN npm install -g "t3@${T3_VERSION}"
 
 COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
