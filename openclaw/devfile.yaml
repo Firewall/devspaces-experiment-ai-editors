@@ -1,15 +1,32 @@
-schemaVersion: 2.2.2
+schemaVersion: 2.3.0
 
 metadata:
-  name: openclaw/openclaw-editor/latest
+  name: openclaw
   displayName: OpenClaw
   description: Self-hosted agent gateway with a browser Control UI, chat, and terminal
+  tags:
+    - ai
+    - agents
+    - gateway
+    - ide
   attributes:
-    publisher: openclaw
-    version: latest
     title: OpenClaw
-    firstPublicationDate: '2026-10-30'
+    arch:
+      - x86_64
+    publisher: devspaces-experiment
+    version: latest
+    provider: Provided by the [OpenClaw project](https://github.com/openclaw/openclaw). See the upstream repository for its license terms.
     repository: https://github.com/openclaw/openclaw
+    firstPublicationDate: '2026-10-30'
+    iconMediatype: image/svg+xml
+    iconData: |
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+        <rect width="64" height="64" rx="14" fill="#101820"/>
+        <path d="M20 14c6 8 8 17 6 27" fill="none" stroke="#f5a623" stroke-width="5" stroke-linecap="round"/>
+        <path d="M32 11c6 9 8 19 6 30" fill="none" stroke="#f5a623" stroke-width="5" stroke-linecap="round"/>
+        <path d="M44 14c6 8 8 17 6 27" fill="none" stroke="#f5a623" stroke-width="5" stroke-linecap="round"/>
+        <ellipse cx="32" cy="49" rx="11" ry="6" fill="#e8eef3"/>
+      </svg>
 
 components:
   - name: openclaw-runtime

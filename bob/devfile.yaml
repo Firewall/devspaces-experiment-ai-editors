@@ -1,13 +1,32 @@
-schemaVersion: 2.2.2
+schemaVersion: 2.3.0
 metadata:
-  name: ibm/bob-editor/poc
+  name: bob
   displayName: Headless Bob console PoC
   description: Browser console with a shared repository and selectable Bob or OpenCode backend
+  tags:
+    - ai
+    - bob
+    - opencode
   attributes:
-    publisher: community
-    version: poc
     title: Headless Bob console PoC
+    arch:
+      - x86_64
+    publisher: devspaces-experiment
+    version: poc
+    provider: IBM Bob is provided by IBM under its own terms. See the [upstream building blocks](https://github.com/ibm-self-serve-assets/building-blocks).
     repository: https://github.com/ibm-self-serve-assets/building-blocks
+    firstPublicationDate: '2026-10-30'
+    iconMediatype: image/svg+xml
+    iconData: |
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+        <rect width="64" height="64" rx="14" fill="#0f62fe"/>
+        <circle cx="32" cy="35" r="16" fill="#ffffff"/>
+        <circle cx="26" cy="33" r="3" fill="#0f62fe"/>
+        <circle cx="38" cy="33" r="3" fill="#0f62fe"/>
+        <path d="M25 41c4 4 10 4 14 0" fill="none" stroke="#0f62fe" stroke-width="3" stroke-linecap="round"/>
+        <path d="M32 19v-7" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+        <circle cx="32" cy="10" r="3" fill="#ffffff"/>
+      </svg>
 commands:
   - id: install-opencode
     apply:

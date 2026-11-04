@@ -181,7 +181,7 @@ Teardown removes the integration's workspace, editor template, direct Service, a
 
 ## Cluster-wide registration
 
-The deploy scripts create templates in your namespace. To add editor definitions to the dashboard picker for everyone, set `NAMESPACE` to the Dev Spaces installation namespace and use the admin registration targets:
+The deploy scripts create templates in your namespace. Every editor folder also contains a Che editor definition: its `devfile.yaml` carries the upstream metadata the dashboard reads, including `metadata.name`, `publisher`, `version`, `arch`, `tags`, and an embedded SVG icon. To add the editors to the dashboard picker for everyone, set `NAMESPACE` to the Dev Spaces installation namespace and use the admin registration targets:
 
 ```bash
 make t3-register
@@ -190,7 +190,12 @@ make orca-register
 make openclaw-register
 make paseo-register
 make vscode-register
+make bob-register  # optional Headless Bob PoC
 ```
+
+Registration renders the devfile into a labelled `editor-definition` ConfigMap (`app.kubernetes.io/part-of=che.eclipse.org`, `app.kubernetes.io/component=editor-definition`) with the definition under its `devfile.yaml` key, then applies it. Editor ids follow Che's `publisher/name/version` format, for example `devspaces-experiment/orca/latest`. Definitions declare only `x86_64` because the images build for `linux/amd64`.
+
+To hand the definition to another cluster or apply it yourself, `make <editor>-definition` writes the same manifest to `<editor>/editor-definition.yaml`. These rendered files are gitignored because they can contain generated credentials.
 
 Remove definitions with the matching `*-unregister` target. For manual Orca registration, also set `ORCA_PAIRING_ADDRESS` to a reachable `wss://` endpoint. Its deploy script calculates that address automatically. For manual OpenClaw registration, set `OPENCLAW_PUBLIC_ORIGIN` to the `https://` Route host; its deploy script also calculates that value. For manual Paseo registration, set `PASEO_HOSTNAMES` to the expected Route host or the cluster apps domain, such as `.apps.example.com`; its deploy script sets only the Route host. Restore your user namespace in `config.env` before deploying or tearing down a workspace.
 
@@ -224,7 +229,7 @@ OpenChamber includes a Red Hat Dark theme. Load it through Settings, Theme, Relo
 
 Each editor directory contains its `Containerfile`, `devfile.yaml`, `deploy.sh`, `teardown.sh`, and startup scripts. T3 Code, OpenChamber, and Orca inject their runtime into a universal developer image. OpenClaw, Paseo, and VS Code Agent Host run their own images directly.
 
-Each `devfile.yaml` defines the editor components, commands, and events. Deployment and admin registration use the same renderer, so changes to those definitions belong in the devfile. The renderer substitutes configuration values and preserves runtime variables such as `$PATH`.
+Each `devfile.yaml` defines the editor components, commands, and events, and doubles as the Che editor definition. Deployment and admin registration use the same renderer, so changes to those definitions belong in the devfile. The renderer substitutes configuration values and preserves runtime variables such as `$PATH`. For registration it wraps the rendered devfile in the labelled ConfigMap that the dashboard scans, and it rejects metadata that Che cannot turn into a `publisher/name/version` editor id.
 
 `shared/` contains deployment helpers, the devfile renderer, and runtime setup. `config.env.example` documents local configuration. The `Makefile` provides build, push, and admin registration targets.
 

@@ -1,15 +1,28 @@
-schemaVersion: 2.2.2
+schemaVersion: 2.3.0
 
 metadata:
-  name: openchamber/openchamber-editor/latest
+  name: openchamber
   displayName: OpenChamber
   description: Agentic development environment with multi-model AI support
+  tags:
+    - ai
+    - opencode
+    - ide
   attributes:
-    publisher: openchamber
-    version: latest
     title: OpenChamber
-    firstPublicationDate: '2025-01-01'
+    arch:
+      - x86_64
+    publisher: devspaces-experiment
+    version: latest
+    provider: Provided by the [OpenChamber project](https://github.com/openchamber/openchamber). See the upstream repository for its license terms.
     repository: https://github.com/openchamber/openchamber
+    firstPublicationDate: '2025-01-01'
+    iconMediatype: image/svg+xml
+    iconData: |
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+        <rect width="64" height="64" rx="14" fill="#0b1726"/>
+        <path d="M20 48V30a12 12 0 0 1 24 0v18" fill="none" stroke="#4fc3f7" stroke-width="7" stroke-linecap="round"/>
+      </svg>
 
 commands:
   - id: init-openchamber-injector

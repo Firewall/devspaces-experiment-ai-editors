@@ -1,15 +1,32 @@
-schemaVersion: 2.2.2
+schemaVersion: 2.3.0
 
 metadata:
-  name: t3-code/t3-code-editor/latest
+  name: t3-code
   displayName: T3 Code
   description: Minimal web GUI for coding agents
+  tags:
+    - ai
+    - coding
+    - ide
   attributes:
-    publisher: t3-code
-    version: latest
     title: T3 Code
-    firstPublicationDate: '2025-01-01'
+    arch:
+      - x86_64
+    publisher: devspaces-experiment
+    version: latest
+    provider: Provided by [T3 Code](https://github.com/pingdotgg/t3code) under the [MIT License](https://github.com/pingdotgg/t3code/blob/main/LICENSE)
     repository: https://github.com/pingdotgg/t3code
+    firstPublicationDate: '2025-01-01'
+    iconMediatype: image/svg+xml
+    iconData: |
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+        <rect width="64" height="64" rx="14" fill="#171717"/>
+        <path d="M12 18h24v7H12z" fill="#ff6b35"/>
+        <path d="M21 18h7v30h-7z" fill="#ff6b35"/>
+        <circle cx="45" cy="23" r="4" fill="#f7f7f7"/>
+        <circle cx="45" cy="34" r="4" fill="#f7f7f7"/>
+        <circle cx="45" cy="45" r="4" fill="#f7f7f7"/>
+      </svg>
 
 commands:
   - id: init-t3-code-injector

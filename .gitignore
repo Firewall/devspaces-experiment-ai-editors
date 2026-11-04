@@ -9,6 +9,7 @@ config.env.*
 !config.env.example
 *.log
 *-rendered.yaml
+editor-definition.yaml
 .devspaces-*/
 **/.devspaces-*/
 entrypoint-logs.txt

@@ -1,14 +1,32 @@
-schemaVersion: 2.2.2
+schemaVersion: 2.3.0
 
 metadata:
-  name: vs-code-agent-host/vs-code-agent-host-editor/latest
+  name: vs-code-agent-host
   displayName: VS Code Agent Host
   description: VS Code Agent Host with bubblewrap sandboxing
+  tags:
+    - ai
+    - agents
+    - vscode
   attributes:
-    publisher: vs-code-agent-host
-    version: latest
     title: VS Code Agent Host
+    arch:
+      - x86_64
+    publisher: devspaces-experiment
+    version: latest
+    provider: VS Code binaries are subject to the [Microsoft product license](https://code.visualstudio.com/license).
+    repository: https://code.visualstudio.com/
     firstPublicationDate: '2026-09-01'
+    iconMediatype: image/svg+xml
+    iconData: |
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+        <rect width="64" height="64" rx="14" fill="#0b2a4a"/>
+        <rect x="12" y="15" width="40" height="27" rx="4" fill="none" stroke="#4fc3f7" stroke-width="3"/>
+        <path d="M20 26l6 5-6 5" fill="none" stroke="#4fc3f7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M31 36h8" stroke="#4fc3f7" stroke-width="3" stroke-linecap="round"/>
+        <path d="M25 49h14" stroke="#4fc3f7" stroke-width="3" stroke-linecap="round"/>
+        <path d="M32 42v7" stroke="#4fc3f7" stroke-width="3" stroke-linecap="round"/>
+      </svg>
 
 components:
   - name: vs-code-agent-host
