@@ -1,6 +1,6 @@
 # OpenClaw requires Node 24.22+ (or Node 26), so this integration runs its own
 # image instead of injecting into the universal developer image's Node 22.
-ARG OPENCLAW_VERSION=2026.10.10
+ARG OPENCLAW_VERSION=2026.11.3
 FROM ghcr.io/openclaw/openclaw:${OPENCLAW_VERSION}
 
 USER 0
