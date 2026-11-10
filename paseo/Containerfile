@@ -1,7 +1,7 @@
 # Paseo ships an image that already runs its daemon and bundled web UI, so this
 # integration extends that image instead of injecting into the universal
 # developer image.
-ARG PASEO_VERSION=0.15.0
+ARG PASEO_VERSION=0.15.4
 FROM ghcr.io/getpaseo/paseo:${PASEO_VERSION}
 
 USER 0
