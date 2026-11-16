@@ -1,0 +1,40 @@
+# KiroCrew ships its own Python 3.12 image with kiro-cli, so this integration
+# builds on the upstream gateway image instead of injecting into the universal
+# developer image the OpenCode-based editors use.
+ARG KIROCREW_VERSION=0.12.2
+FROM ghcr.io/kirodotdev/kirocrew:${KIROCREW_VERSION}
+
+USER 0
+
+# Agent sessions search repositories. ripgrep is present upstream; ship the fd
+# binary under the name agents probe for so search does not need a download.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends fd-find procps && \
+    ln -s /usr/bin/fdfind /usr/local/bin/fd && \
+    rm -rf /var/lib/apt/lists/*
+
+# OpenShift CLI for workspace terminals, matching the other integrations.
+RUN curl -fsSL "https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz" \
+      | tar xz -C /usr/local/bin oc kubectl && \
+    chmod 755 /usr/local/bin/oc /usr/local/bin/kubectl
+
+COPY shared/runtime.sh /usr/local/bin/shared-runtime.sh
+COPY shared/bashrc.sh /usr/local/bin/shared-bashrc.sh
+COPY kirocrew/entrypoint.sh /usr/local/bin/kirocrew-entrypoint.sh
+
+# OpenShift runs an arbitrary UID in GID 0. Make the passwd entry writable so
+# startup can add one, and keep the injected scripts executable.
+RUN chmod 755 /usr/local/bin/shared-*.sh /usr/local/bin/kirocrew-entrypoint.sh && \
+    chgrp 0 /etc/passwd && chmod g=u /etc/passwd
+
+# The upstream image's HOME is not writable under an arbitrary UID. All state
+# lives on the workspace volume instead, and oc exec gets the same values.
+ENV HOME=/projects/.devspaces-kirocrew \
+    KIROCREW_PORT=5476 \
+    KIROCREW_BIND=0.0.0.0
+
+USER kirocrew
+
+EXPOSE 5476
+
+ENTRYPOINT ["/usr/local/bin/kirocrew-entrypoint.sh"]

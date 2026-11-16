@@ -32,6 +32,11 @@ PASEO_DIR = paseo
 PASEO_CONFIGMAP ?= paseo-editor-definition
 PASEO_DEVFILE = $(PASEO_DIR)/devfile.yaml
 
+# ---- KiroCrew ----
+KIROCREW_DIR = kirocrew
+KIROCREW_CONFIGMAP ?= kirocrew-editor-definition
+KIROCREW_DEVFILE = $(KIROCREW_DIR)/devfile.yaml
+
 BOB_DIR = bob
 BOB_CONFIGMAP ?= bob-editor-definition
 BOB_DEVFILE = $(BOB_DIR)/devfile.yaml
@@ -46,6 +51,8 @@ BOB_DEVFILE = $(BOB_DIR)/devfile.yaml
         openclaw-register openclaw-unregister openclaw-devfile openclaw-definition \
         paseo-build paseo-push paseo-deploy paseo-teardown \
         paseo-register paseo-unregister paseo-devfile paseo-definition \
+        kirocrew-build kirocrew-push kirocrew-deploy kirocrew-test kirocrew-teardown \
+        kirocrew-register kirocrew-unregister kirocrew-devfile kirocrew-definition \
         bob-build bob-push bob-deploy bob-test bob-teardown bob-register bob-unregister bob-devfile bob-definition
 
 check-namespace:
@@ -204,6 +211,35 @@ paseo-deploy:
 
 paseo-teardown:
 	$(PASEO_DIR)/teardown.sh
+
+# === KiroCrew targets ===
+kirocrew-build:
+	podman build --platform linux/amd64 -f $(KIROCREW_DIR)/Containerfile -t $(KIROCREW_IMAGE) .
+
+kirocrew-push:
+	podman push $(KIROCREW_IMAGE)
+
+kirocrew-devfile:
+	python3 shared/render-devfile.py "$(KIROCREW_DEVFILE)" --output "$(KIROCREW_DIR)/devfile-rendered.yaml"
+
+kirocrew-definition:
+	python3 shared/render-devfile.py "$(KIROCREW_DEVFILE)" --configmap "$(KIROCREW_CONFIGMAP)" \
+	  --output "$(KIROCREW_DIR)/editor-definition.yaml"
+
+kirocrew-register: check-namespace
+	@$(call register_editor_definition,$(KIROCREW_DEVFILE),$(KIROCREW_CONFIGMAP))
+
+kirocrew-unregister: check-namespace
+	oc delete configmap $(KIROCREW_CONFIGMAP) -n $(NAMESPACE)
+
+kirocrew-deploy:
+	$(KIROCREW_DIR)/deploy.sh
+
+kirocrew-test:
+	$(KIROCREW_DIR)/test.sh
+
+kirocrew-teardown:
+	$(KIROCREW_DIR)/teardown.sh
 
 # === IBM Bob PoC targets ===
 bob-build:

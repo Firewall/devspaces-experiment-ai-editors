@@ -1,6 +1,6 @@
 # Editors for OpenShift Dev Spaces
 
-Run T3 Code, OpenChamber, Orca, OpenClaw, Paseo, or VS Code Agent Host in OpenShift Dev Spaces workspaces. This repository contains container recipes, devfiles, and scripts that build an image and create a workspace in your user namespace.
+Run T3 Code, OpenChamber, Orca, OpenClaw, Paseo, KiroCrew, or VS Code Agent Host in OpenShift Dev Spaces workspaces. This repository contains container recipes, devfiles, and scripts that build an image and create a workspace in your user namespace.
 
 A [Headless Bob proof of concept](bob/README.md) adds a browser console with a shared repository. Select OpenCode with a free model or IBM Bob Shell with a Bob subscription. Start with `./bob/deploy.sh` after setting `BOB_IMAGE` and `BOB_BACKEND` in `config.env`.
 
@@ -13,6 +13,7 @@ This is an experiment. Direct OpenShift Routes work around Che gateway routing l
 | [Orca](https://github.com/stablyai/orca) | 6768 | Browser pairing URL | Browser |
 | [OpenClaw](https://github.com/openclaw/openclaw) | 18789 | Gateway token | Browser |
 | [Paseo](https://github.com/getpaseo/paseo) | 6767 | Password | Browser |
+| [KiroCrew](https://github.com/kirodotdev/KiroCrew) | 5476 | Dashboard sign-in link | Browser |
 | [VS Code Agent Host](https://code.visualstudio.com/) | 3773 | Connection token | Compatible VS Code client |
 
 VS Code Agent Host exposes an agent service. Its URL is a service endpoint for a compatible client, rather than a browser IDE.
@@ -52,6 +53,7 @@ OPENCHAMBER_IMAGE=quay.io/my-org/devspaces-openchamber-editor:latest
 ORCA_IMAGE=quay.io/my-org/devspaces-orca-editor:latest
 OPENCLAW_IMAGE=quay.io/my-org/devspaces-openclaw-editor:latest
 PASEO_IMAGE=quay.io/my-org/devspaces-paseo-editor:latest
+KIROCREW_IMAGE=quay.io/my-org/devspaces-kirocrew-editor:latest
 AGENT_HOST_IMAGE=quay.io/my-org/devspaces-vs-code-agent-host:latest
 ```
 
@@ -74,16 +76,30 @@ Run the script for your chosen editor from the repository root:
 # or
 ./paseo/deploy.sh
 # or
+./kirocrew/deploy.sh
+# or
 ./vs-code-agent-host/deploy.sh
 ```
 
 Each script builds and pushes a `linux/amd64` image, creates an editor template and workspace, waits for the pod, and creates a direct HTTPS Route. It then prints the connection URL and credential. Keep that output private.
 
-Orca creates its Route before starting the workspace so its pairing URL advertises the external WebSocket address. OpenClaw does the same so its gateway can allowlist the public origin, and Paseo does it so its hostname allowlist matches the Route. The other integrations create the Route after the pod starts.
+Orca creates its Route before starting the workspace so its pairing URL advertises the external WebSocket address. OpenClaw does the same so its gateway can allowlist the public origin, Paseo does it so its hostname allowlist matches the Route, and KiroCrew does it so its dashboard origin is allowlisted. The other integrations create the Route after the pod starts.
 
 For OpenClaw, open the printed URL, paste the gateway token into the Control UI, and pick a model in Settings. The Control UI provides chat, an operator terminal in `/projects`, and file browsing. The dashboard Open button may not work; use the printed URL.
 
 For Paseo, open the printed URL and enter the printed password. Select OpenCode as the provider, then choose a Red Hat AI model. Paseo disables local dictation by default so a fresh workspace does not download speech models.
+
+For KiroCrew, open the `Login` link the deploy script prints. The link must be opened within five minutes; the session it creates lasts up to 20 hours and refreshes for 30 idle days. Chat sessions run on `kiro-cli`, so sign in the agent runtime once before starting a chat:
+
+```bash
+source ./config.env
+POD=$(oc get pods -n "$NAMESPACE" \
+  -l controller.devfile.io/devworkspace_name=kirocrew-workspace \
+  --no-headers | awk '$3 != "Completed" && $1 !~ /cleanup/ {print $1; exit}')
+oc exec -it "$POD" -c kirocrew-runtime -n "$NAMESPACE" -- kiro-cli login
+```
+
+To mint a fresh link later, run `kirocrew token --ttl 20h` in the container and replace `localhost:5476` with the Route host. The dashboard provides chat, sessions, schedules, memory, skills, and a terminal.
 
 The workspace initially has no source repository. Add or clone your code under `/projects` after connecting. Each integration uses fixed workspace and resource names, so rerunning its script updates the same resources in the configured namespace.
 
@@ -97,7 +113,7 @@ The test checks the pod, CLI, token, bubblewrap, service, and Route. Bubblewrap 
 
 ## CI builds
 
-[`.github/workflows/build-images.yaml`](.github/workflows/build-images.yaml) builds the six editor images for `linux/amd64` on a pull request and on every push to `main`. Runs are independent per image, so a failure in one does not stop the others, and BuildKit caches layers in the GitHub Actions cache.
+[`.github/workflows/build-images.yaml`](.github/workflows/build-images.yaml) builds the seven editor images for `linux/amd64` on a pull request and on every push to `main`. Runs are independent per image, so a failure in one does not stop the others, and BuildKit caches layers in the GitHub Actions cache.
 
 Pull requests build only, which verifies the Containerfiles without publishing unreviewed code. Pushes to `main` also push two tags to Quay, using the Quay namespace instead of `myorg`:
 
@@ -106,7 +122,7 @@ quay.io/myorg/devspaces-t3-code-editor:latest
 quay.io/myorg/devspaces-t3-code-editor:sha-<commit>
 ```
 
-Images follow the same names as `config.env.example`: `devspaces-t3-code-editor`, `devspaces-openchamber-editor`, `devspaces-orca-editor`, `devspaces-openclaw-editor`, `devspaces-paseo-editor`, and `devspaces-vs-code-agent-host`.
+Images follow the same names as `config.env.example`: `devspaces-t3-code-editor`, `devspaces-openchamber-editor`, `devspaces-orca-editor`, `devspaces-openclaw-editor`, `devspaces-paseo-editor`, `devspaces-kirocrew-editor`, and `devspaces-vs-code-agent-host`.
 
 Add these repository secrets under Settings, Secrets and variables, Actions:
 
@@ -115,7 +131,7 @@ Add these repository secrets under Settings, Secrets and variables, Actions:
 | `QUAY_USERNAME` | Quay robot account name, for example `myorg+ci` |
 | `QUAY_TOKEN` | Token for that robot account with write access |
 
-The robot account needs permission to create repositories, or you must create the six repositories before the first push. Optionally set a repository variable `QUAY_NAMESPACE` when the Quay namespace differs from the repository owner; the workflow defaults to the owner, lowercased.
+The robot account needs permission to create repositories, or you must create the seven repositories before the first push. Optionally set a repository variable `QUAY_NAMESPACE` when the Quay namespace differs from the repository owner; the workflow defaults to the owner, lowercased.
 
 Start the workflow manually from the Actions tab to build without a new commit. The Headless Bob image stays a local build because it bundles IBM Bob Shell under IBM's separate terms; see [bob/README.md](bob/README.md).
 
@@ -136,6 +152,7 @@ To retrieve a credential later, find the workspace pod and read the file for you
 | Orca | `orca-workspace` | `orca-runtime` | `/projects/.devspaces-orca/ready.jsonl` |
 | OpenClaw | `openclaw-workspace` | `openclaw-runtime` | `/projects/.devspaces-openclaw/gateway-token` |
 | Paseo | `paseo-workspace` | `paseo-runtime` | `/projects/.devspaces-paseo/password.txt` |
+| KiroCrew | `kirocrew-workspace` | `kirocrew-runtime` | None; mint a link with `kirocrew token` |
 | VS Code Agent Host | `vs-code-agent-host-workspace` | `vs-code-agent-host` | `/projects/.devspaces-agent-host/connection-token` |
 
 For example, to retrieve the T3 Code token:
@@ -149,7 +166,7 @@ oc exec "$POD" -c t3-code-runtime -n "$NAMESPACE" -- \
   cat /projects/.devspaces-t3code/pairing-token.txt
 ```
 
-For Orca, use the full `pairing.webClientUrl` in its readiness JSON, including the fragment. Treat that URL as a credential. The OpenClaw gateway token grants full operator access to that workspace, including its terminal. The Paseo password protects the daemon API, WebSocket, and terminals; the static login page loads without it. T3 Code creates a pairing token with a 30-day lifetime; an expired, unused token needs to be recreated.
+For Orca, use the full `pairing.webClientUrl` in its readiness JSON, including the fragment. Treat that URL as a credential. The OpenClaw gateway token grants full operator access to that workspace, including its terminal. The Paseo password protects the daemon API, WebSocket, and terminals; the static login page loads without it. KiroCrew has no long-lived password: `kirocrew token` mints a short-lived link, and `kirocrew logout` ends every dashboard session. Treat a minted link as a credential while it is valid. T3 Code creates a pairing token with a 30-day lifetime; an expired, unused token needs to be recreated.
 
 Keep passwords, pairing URLs, and logs out of issues and pull requests.
 
@@ -157,7 +174,7 @@ Keep passwords, pairing URLs, and logs out of issues and pull requests.
 
 This repository only builds and deploys the editors. It does not configure model providers or cloud credentials. Use the agents and credentials available in your Dev Spaces workspace, or install what you need in a workspace terminal.
 
-Editor state persists on `/projects`: T3 Code in `.devspaces-t3code`, OpenChamber in `.devspaces-openchamber`, Orca in `.devspaces-orca`, OpenClaw in `.devspaces-openclaw`, Paseo in `.devspaces-paseo`, and VS Code Agent Host in `.devspaces-agent-host`.
+Editor state persists on `/projects`: T3 Code in `.devspaces-t3code`, OpenChamber in `.devspaces-openchamber`, Orca in `.devspaces-orca`, OpenClaw in `.devspaces-openclaw`, Paseo in `.devspaces-paseo`, KiroCrew in `.devspaces-kirocrew`, and VS Code Agent Host in `.devspaces-agent-host`.
 
 ## Remove a deployment
 
@@ -174,6 +191,8 @@ Use the matching teardown script:
 # or
 ./paseo/teardown.sh
 # or
+./kirocrew/teardown.sh
+# or
 ./vs-code-agent-host/teardown.sh
 ```
 
@@ -189,6 +208,7 @@ make chamber-register
 make orca-register
 make openclaw-register
 make paseo-register
+make kirocrew-register
 make vscode-register
 make bob-register  # optional Headless Bob PoC
 ```
@@ -197,11 +217,11 @@ Registration renders the devfile into a labelled `editor-definition` ConfigMap (
 
 To hand the definition to another cluster or apply it yourself, `make <editor>-definition` writes the same manifest to `<editor>/editor-definition.yaml`. These rendered files are gitignored because they can contain generated credentials.
 
-Remove definitions with the matching `*-unregister` target. For manual Orca registration, also set `ORCA_PAIRING_ADDRESS` to a reachable `wss://` endpoint. Its deploy script calculates that address automatically. For manual OpenClaw registration, set `OPENCLAW_PUBLIC_ORIGIN` to the `https://` Route host; its deploy script also calculates that value. For manual Paseo registration, set `PASEO_HOSTNAMES` to the expected Route host or the cluster apps domain, such as `.apps.example.com`; its deploy script sets only the Route host. Restore your user namespace in `config.env` before deploying or tearing down a workspace.
+Remove definitions with the matching `*-unregister` target. For manual Orca registration, also set `ORCA_PAIRING_ADDRESS` to a reachable `wss://` endpoint. Its deploy script calculates that address automatically. For manual OpenClaw registration, set `OPENCLAW_PUBLIC_ORIGIN` to the `https://` Route host; its deploy script also calculates that value. For manual Paseo registration, set `PASEO_HOSTNAMES` to the expected Route host or the cluster apps domain, such as `.apps.example.com`; its deploy script sets only the Route host. For manual KiroCrew registration, set `KIROCREW_PUBLIC_ORIGIN` to the `https://` Route host so the dashboard accepts the Route origin. Restore your user namespace in `config.env` before deploying or tearing down a workspace.
 
 ## Versions and limitations
 
-The Containerfiles pin T3 Code, OpenChamber, Orca, OpenClaw, and Paseo to explicit versions. T3 Code pins the latest stable release (`T3_VERSION` in [t3-code/Containerfile](t3-code/Containerfile)); set it to a `nightly` tag such as `0.1.6-nightly.20261030.3917` to track nightlies. Update the version declarations when testing a newer release. Base images and the VS Code stable CLI still follow moving releases, so builds are not fully reproducible.
+The Containerfiles pin T3 Code, OpenChamber, Orca, OpenClaw, Paseo, and KiroCrew to explicit versions. T3 Code pins the latest stable release (`T3_VERSION` in [t3-code/Containerfile](t3-code/Containerfile)); set it to a `nightly` tag such as `0.1.6-nightly.20261030.3917` to track nightlies. Update the version declarations when testing a newer release. Base images and the VS Code stable CLI still follow moving releases, so builds are not fully reproducible.
 
 `renovate.json` keeps those pins current. Renovate reads the `ARG` and `ENV` declarations, so it proposes T3 Code, OpenChamber, the OpenCode CLI, Orca, OpenClaw, Paseo, and bubblewrap releases as pull requests. It never builds, deploys, or merges: the [Build images workflow](.github/workflows/build-images.yaml) builds each affected image on the pull request, and a reviewer decides. Install the [Renovate GitHub App](https://github.com/apps/renovate) on this repository to enable it. OpenChamber and the OpenCode CLI arrive in one pull request because they have to move together.
 
@@ -219,6 +239,8 @@ OpenClaw needs Node 24.22 or newer, which the universal developer image does not
 
 Paseo builds on its official daemon and web UI image instead of the universal developer image, then adds OpenCode, the OpenShift CLI, and the Google Cloud SDK. It rejects requests whose `Host` header is not allowlisted, so the devfile sets `PASEO_HOSTNAMES` to the Route host at deploy time. It also trusts `X-Forwarded-Proto` only from `PASEO_TRUSTED_PROXIES`; the defaults cover private ranges, and a wrong list leaves the web UI connecting over `ws://` instead of `wss://`. Paseo's direct Route also uses a one-hour proxy timeout for long agent turns. The bundled web UI and daemon share one version, so update `PASEO_VERSION` as a unit.
 
+KiroCrew builds on its upstream image, which ships `kiro-cli` but not Node, so the ACP harnesses that need Node are unavailable and KiroCrew uses its native backend. The integration sets `KIROCREW_ALLOW_UNSANDBOXED=1` by default because many clusters deny the user namespaces its sandbox needs; the container then becomes the isolation boundary for agent commands. The upstream entrypoint records this posture in `config.json` on first run, so to use the inner sandbox later, delete `config.json` and start the workspace with the setting removed or set to `0`. Agent-generated environment variables cannot override `KIROCREW_*` settings, and the entrypoint deliberately leaves `KIROCREW_HOME` unset to avoid upstream reserved-namespace warnings. The upstream image is multi-arch, so the same Containerfile builds for `linux/arm64` on an ARM cluster even though CI publishes `linux/amd64` only.
+
 T3 Code, OpenChamber, and Paseo assets use absolute paths that break under Che gateway subpaths. The direct Routes work around this, but the dashboard Open button may still lack an IDE URL. Use the URL printed by the deploy script. See [T3 Code's routing issue](https://github.com/pingdotgg/t3code/issues/2310).
 
 Che gateway probes can trigger Node.js `ECONNRESET` exits. The T3 Code, OpenChamber, and Paseo entrypoints restart the server after two seconds. This recovers the process but does not fix the upstream error.
@@ -227,7 +249,7 @@ OpenChamber includes a Red Hat Dark theme. Load it through Settings, Theme, Relo
 
 ## Repository layout
 
-Each editor directory contains its `Containerfile`, `devfile.yaml`, `deploy.sh`, `teardown.sh`, and startup scripts. T3 Code, OpenChamber, and Orca inject their runtime into a universal developer image. OpenClaw, Paseo, and VS Code Agent Host run their own images directly.
+Each editor directory contains its `Containerfile`, `devfile.yaml`, `deploy.sh`, `teardown.sh`, and startup scripts. T3 Code, OpenChamber, and Orca inject their runtime into a universal developer image. OpenClaw, Paseo, KiroCrew, and VS Code Agent Host run their own images directly.
 
 Each `devfile.yaml` defines the editor components, commands, and events, and doubles as the Che editor definition. Deployment and admin registration use the same renderer, so changes to those definitions belong in the devfile. The renderer substitutes configuration values and preserves runtime variables such as `$PATH`. For registration it wraps the rendered devfile in the labelled ConfigMap that the dashboard scans, and it rejects metadata that Che cannot turn into a `publisher/name/version` editor id.
 
@@ -239,6 +261,6 @@ Run the local editor-script checks with `python3 -m unittest discover -s tests`.
 
 ## License
 
-The integration code is licensed under [MIT](LICENSE). [T3 Code](https://github.com/pingdotgg/t3code), [OpenChamber](https://github.com/openchamber/openchamber), [Orca](https://github.com/stablyai/orca), [OpenClaw](https://github.com/openclaw/openclaw), [Paseo](https://github.com/getpaseo/paseo), [OpenCode](https://github.com/anomalyco/opencode), and their dependencies keep their own licenses. Preserve upstream license files and notices when redistributing images.
+The integration code is licensed under [MIT](LICENSE). [T3 Code](https://github.com/pingdotgg/t3code), [OpenChamber](https://github.com/openchamber/openchamber), [Orca](https://github.com/stablyai/orca), [OpenClaw](https://github.com/openclaw/openclaw), [Paseo](https://github.com/getpaseo/paseo), [KiroCrew](https://github.com/kirodotdev/KiroCrew), [OpenCode](https://github.com/anomalyco/opencode), and their dependencies keep their own licenses. Preserve upstream license files and notices when redistributing images.
 
 The Orca integration applies a small patch and includes its [upstream license](https://github.com/stablyai/orca/blob/v1.4.219/LICENSE) in the runtime image. VS Code binaries have separate [Microsoft product](https://code.visualstudio.com/license) and [server terms](https://code.visualstudio.com/license/server); review those before distributing an image or offering a hosted service.
