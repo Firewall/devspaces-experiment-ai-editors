@@ -39,6 +39,9 @@ jobs:
           - editor: paseo
             image: devspaces-paseo-editor
             containerfile: paseo/Containerfile
+          - editor: kirocrew
+            image: devspaces-kirocrew-editor
+            containerfile: kirocrew/Containerfile
           - editor: vs-code-agent-host
             image: devspaces-vs-code-agent-host
             containerfile: vs-code-agent-host/Containerfile

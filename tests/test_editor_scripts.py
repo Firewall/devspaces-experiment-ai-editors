@@ -20,6 +20,7 @@ EDITORS = {
     "vs-code-agent-host": ("agent-host-direct", 3773, "300s"),
     "openclaw": ("openclaw-direct", 18789, "300s"),
     "paseo": ("paseo-direct", 6767, "300s"),
+    "kirocrew": ("kirocrew-direct", 5476, "300s"),
 }
 # Makefile prefix and ConfigMap name for every registrable editor definition.
 REGISTRATIONS = {
@@ -29,6 +30,7 @@ REGISTRATIONS = {
     "vs-code-agent-host": ("vscode", "vs-code-agent-host-editor-definition"),
     "openclaw": ("openclaw", "openclaw-editor-definition"),
     "paseo": ("paseo", "paseo-editor-definition"),
+    "kirocrew": ("kirocrew", "kirocrew-editor-definition"),
     "bob": ("bob", "bob-editor-definition"),
 }
 
@@ -65,6 +67,7 @@ class EditorScriptTests(unittest.TestCase):
             "AGENT_HOST_IMAGE=localhost/test-vscode\n"
             "OPENCLAW_IMAGE=localhost/test-openclaw\n"
             "PASEO_IMAGE=localhost/test-paseo\n"
+            "KIROCREW_IMAGE=localhost/test-kirocrew\n"
             "BOB_IMAGE=localhost/test-bob\n"
             "OPENCHAMBER_UI_PASSWORD=test-password\n"
         )
@@ -187,9 +190,10 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
                 runtime = next(component for component in components
                                if component["name"] == (editor if editor == "vs-code-agent-host" else f"{editor}-runtime"))
                 self.assertIn("main", runtime["container"]["endpoints"][0]["attributes"]["type"])
-                if editor in ("orca", "openclaw", "paseo"):
+                if editor in ("orca", "openclaw", "paseo", "kirocrew"):
                     # These create the Route first: Orca needs its pairing address,
-                    # OpenClaw its public origin, and Paseo its hostname allowlist entry.
+                    # OpenClaw its public origin, Paseo its hostname allowlist entry,
+                    # and KiroCrew its dashboard origin.
                     self.assertIs(manifests[0], direct_route)
                     self.assertIn(f"controller.devfile.io/devworkspace_name: {editor}-workspace", direct_route)
                     if editor == "orca":
@@ -279,7 +283,8 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
 
     def register_devfile(self, editor):
         prefix = {"t3-code": "t3", "openchamber": "chamber", "orca": "orca",
-                  "vs-code-agent-host": "vscode", "openclaw": "openclaw", "paseo": "paseo"}[editor]
+                  "vs-code-agent-host": "vscode", "openclaw": "openclaw", "paseo": "paseo",
+                  "kirocrew": "kirocrew"}[editor]
         result = subprocess.run(
             ["make", f"{prefix}-devfile"], cwd=self.root, env=self.env,
             capture_output=True, text=True, timeout=15,
@@ -355,6 +360,7 @@ elif tool == "podman" and os.environ.get("TEST_BUILD_FAILURE"):
         self.env["ORCA_PAIRING_ADDRESS"] = "wss://editor.test.example/"
         self.env["OPENCLAW_PUBLIC_ORIGIN"] = "https://editor.test.example"
         self.env["PASEO_HOSTNAMES"] = "editor.test.example"
+        self.env["KIROCREW_PUBLIC_ORIGIN"] = "https://editor.test.example"
         for editor in EDITORS:
             with self.subTest(editor=editor):
                 result, commands = self.run_script(editor, "deploy.sh")

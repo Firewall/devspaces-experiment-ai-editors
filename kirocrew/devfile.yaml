@@ -1,0 +1,62 @@
+schemaVersion: 2.3.0
+
+metadata:
+  name: kirocrew
+  displayName: KiroCrew
+  description: Persistent agent workspace with a browser dashboard, schedules, and task runner
+  tags:
+    - ai
+    - agents
+    - dashboard
+    - ide
+  attributes:
+    title: KiroCrew persistent agent workspace
+    arch:
+      - x86_64
+    publisher: devspaces-experiment
+    version: latest
+    provider: Provided by the [KiroCrew project](https://github.com/kirodotdev/KiroCrew) under the [Apache License 2.0](https://github.com/kirodotdev/KiroCrew/blob/main/LICENSE).
+    repository: https://github.com/kirodotdev/KiroCrew
+    firstPublicationDate: '2026-11-16'
+    iconMediatype: image/svg+xml
+    iconData: |
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+        <rect width="64" height="64" rx="14" fill="#111827"/>
+        <path d="M20 14v36" fill="none" stroke="#f0f4f8" stroke-width="6" stroke-linecap="round"/>
+        <path d="M44 14L24 32l20 18" fill="none" stroke="#f0f4f8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="48" cy="32" r="5" fill="#4fc3f7"/>
+      </svg>
+
+components:
+  - name: kirocrew-runtime
+    container:
+      image: ${KIROCREW_IMAGE}
+      mountSources: true
+      sourceMapping: /projects
+      env:
+        - name: KIROCREW_PUBLIC_ORIGIN
+          value: "${KIROCREW_PUBLIC_ORIGIN}"
+        - name: KIROCREW_ALLOW_UNSANDBOXED
+          value: "${KIROCREW_ALLOW_UNSANDBOXED}"
+        - name: KIRO_API_KEY
+          value: "${KIRO_API_KEY}"
+      command:
+        - /usr/local/bin/kirocrew-entrypoint.sh
+      memoryLimit: 6144Mi
+      memoryRequest: 1536Mi
+      cpuLimit: 2000m
+      cpuRequest: 200m
+      endpoints:
+        - name: kirocrew
+          targetPort: 5476
+          exposure: public
+          protocol: https
+          secure: true
+          attributes:
+            type: main
+            cookiesAuthEnabled: true
+            discoverable: false
+            urlRewriteSupported: true
+    attributes:
+      app.kubernetes.io/component: kirocrew-runtime
+      app.kubernetes.io/part-of: kirocrew

@@ -13,7 +13,7 @@ except ImportError:
     sys.exit("Install the devfile renderer dependency with: python3 -m pip install -r requirements.txt")
 
 
-IMAGE_VARIABLES = {"T3_IMAGE", "OPENCHAMBER_IMAGE", "ORCA_IMAGE", "AGENT_HOST_IMAGE", "BOB_IMAGE", "OPENCLAW_IMAGE", "PASEO_IMAGE"}
+IMAGE_VARIABLES = {"T3_IMAGE", "OPENCHAMBER_IMAGE", "ORCA_IMAGE", "AGENT_HOST_IMAGE", "BOB_IMAGE", "OPENCLAW_IMAGE", "PASEO_IMAGE", "KIROCREW_IMAGE"}
 DEFAULTS = {
     "OPENCHAMBER_UI_PASSWORD": "",
     "ORCA_PAIRING_ADDRESS": "",
@@ -30,6 +30,12 @@ DEFAULTS = {
     "OPENCLAW_TRUSTED_PROXIES": "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
     "OPENCLAW_PUBLIC_ORIGIN": "",
     "OPENCLAW_GATEWAY_TOKEN": "",
+    # KiroCrew's inner sandbox needs user namespaces, which Dev Spaces nodes
+    # commonly deny. The container is then the isolation boundary, so the
+    # devfile opts in explicitly. Set 0 to keep the fail-closed default.
+    "KIROCREW_ALLOW_UNSANDBOXED": "1",
+    "KIROCREW_PUBLIC_ORIGIN": "",
+    "KIRO_API_KEY": "",
 }
 PLACEHOLDER = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
 # Che builds an editor id as publisher/metadata.name/version and shows the editor
