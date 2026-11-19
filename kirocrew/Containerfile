@@ -1,7 +1,7 @@
 # KiroCrew ships its own Python 3.12 image with kiro-cli, so this integration
 # builds on the upstream gateway image instead of injecting into the universal
 # developer image the OpenCode-based editors use.
-ARG KIROCREW_VERSION=0.12.2
+ARG KIROCREW_VERSION=0.13.0
 FROM ghcr.io/kirodotdev/kirocrew:${KIROCREW_VERSION}
 
 USER 0
